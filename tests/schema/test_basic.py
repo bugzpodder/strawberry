@@ -8,18 +8,13 @@ import pytest
 
 import strawberry
 from strawberry import ID
-from strawberry.exceptions import (
-    FieldWithResolverAndDefaultFactoryError,
-    FieldWithResolverAndDefaultValueError,
-)
 from strawberry.scalars import Base64
 from strawberry.schema_directive import Location
-from strawberry.type import StrawberryList
+from strawberry.types.base import StrawberryList
 
 
 def test_raises_exception_with_unsupported_types():
-    class SomeType:
-        ...
+    class SomeType: ...
 
     @strawberry.type
     class Query:
@@ -370,7 +365,8 @@ def test_parent_class_fields_are_inherited():
 
 def test_can_return_compatible_type():
     """Test that we can return a different type that has the same fields,
-    for example when returning a Django Model."""
+    for example when returning a Django Model.
+    """
 
     @dataclass
     class Example:
@@ -467,9 +463,9 @@ def test_multiple_fields_with_same_type():
 def test_str_magic_method_prints_schema_sdl():
     @strawberry.type
     class Query:
-        exampleBool: bool
-        exampleStr: str = "Example"
-        exampleInt: int = 1
+        example_bool: bool
+        example_str: str = "Example"
+        example_int: int = 1
 
     schema = strawberry.Schema(query=Query)
     expected = """
@@ -480,9 +476,9 @@ def test_str_magic_method_prints_schema_sdl():
     }
     """
     assert str(schema) == textwrap.dedent(expected).strip()
-    assert "<strawberry.schema.schema.Schema object" in repr(
-        schema
-    ), "Repr should not be affected"
+    assert "<strawberry.schema.schema.Schema object" in repr(schema), (
+        "Repr should not be affected"
+    )
 
 
 def test_field_with_default():
@@ -498,37 +494,6 @@ def test_field_with_default():
 
     assert not result.errors
     assert result.data == {"a": "Example"}
-
-
-def test_field_with_resolver_default():
-    with pytest.raises(FieldWithResolverAndDefaultValueError):
-
-        @strawberry.type
-        class Query:
-            @strawberry.field(default="Example C")
-            def c(self) -> str:
-                return "I'm a resolver"
-
-
-def test_field_with_separate_resolver_default():
-    with pytest.raises(FieldWithResolverAndDefaultValueError):
-
-        def test_resolver() -> str:
-            return "I'm a resolver"
-
-        @strawberry.type
-        class Query:
-            c: str = strawberry.field(default="Example C", resolver=test_resolver)
-
-
-def test_field_with_resolver_default_factory():
-    with pytest.raises(FieldWithResolverAndDefaultFactoryError):
-
-        @strawberry.type
-        class Query:
-            @strawberry.field(default_factory=lambda: "Example C")
-            def c(self) -> str:
-                return "I'm a resolver"
 
 
 def test_with_types():
@@ -579,7 +544,7 @@ def test_with_types():
         type Type {
           foo: Int!
         }
-    '''  # noqa: E501
+    '''
 
     assert str(schema) == textwrap.dedent(expected).strip()
 

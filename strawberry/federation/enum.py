@@ -1,11 +1,21 @@
-from typing import Any, Callable, Iterable, Optional, Union, overload
+from __future__ import annotations
 
-from strawberry.enum import (
-    EnumType,
-    EnumValueDefinition,
-    _process_enum,
-    enum_value as base_enum_value,
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Optional,
+    Union,
+    overload,
 )
+
+from strawberry.types.enum import _process_enum
+from strawberry.types.enum import enum_value as base_enum_value
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from strawberry.enum import EnumType, EnumValueDefinition
 
 
 def enum_value(
@@ -32,26 +42,30 @@ def enum_value(
 def enum(
     _cls: EnumType,
     *,
-    name=None,
-    description=None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
     directives: Iterable[object] = (),
+    authenticated: bool = False,
     inaccessible: bool = False,
+    policy: Optional[list[list[str]]] = None,
+    requires_scopes: Optional[list[list[str]]] = None,
     tags: Optional[Iterable[str]] = (),
-) -> EnumType:
-    ...
+) -> EnumType: ...
 
 
 @overload
 def enum(
     _cls: None = None,
     *,
-    name=None,
-    description=None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
     directives: Iterable[object] = (),
+    authenticated: bool = False,
     inaccessible: bool = False,
+    policy: Optional[list[list[str]]] = None,
+    requires_scopes: Optional[list[list[str]]] = None,
     tags: Optional[Iterable[str]] = (),
-) -> Callable[[EnumType], EnumType]:
-    ...
+) -> Callable[[EnumType], EnumType]: ...
 
 
 def enum(
@@ -60,21 +74,38 @@ def enum(
     name=None,
     description=None,
     directives=(),
-    inaccessible=False,
-    tags=(),
+    authenticated: bool = False,
+    inaccessible: bool = False,
+    policy: Optional[list[list[str]]] = None,
+    requires_scopes: Optional[list[list[str]]] = None,
+    tags: Optional[Iterable[str]] = (),
 ) -> Union[EnumType, Callable[[EnumType], EnumType]]:
     """Registers the enum in the GraphQL type system.
 
     If name is passed, the name of the GraphQL type will be
     the value passed of name instead of the Enum class name.
     """
-
-    from strawberry.federation.schema_directives import Inaccessible, Tag
+    from strawberry.federation.schema_directives import (
+        Authenticated,
+        Inaccessible,
+        Policy,
+        RequiresScopes,
+        Tag,
+    )
 
     directives = list(directives)
 
+    if authenticated:
+        directives.append(Authenticated())
+
     if inaccessible:
         directives.append(Inaccessible())
+
+    if policy:
+        directives.append(Policy(policies=policy))
+
+    if requires_scopes:
+        directives.append(RequiresScopes(scopes=requires_scopes))
 
     if tags:
         directives.extend(Tag(name=tag) for tag in tags)
@@ -86,3 +117,6 @@ def enum(
         return wrap
 
     return wrap(_cls)  # pragma: no cover
+
+
+__all__ = ["enum", "enum_value"]

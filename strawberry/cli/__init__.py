@@ -1,15 +1,17 @@
-import click
+try:
+    from .app import app
+    from .commands.codegen import codegen as codegen  # noqa: PLC0414
+    from .commands.export_schema import export_schema as export_schema  # noqa: PLC0414
+    from .commands.schema_codegen import (
+        schema_codegen as schema_codegen,  # noqa: PLC0414
+    )
+    from .commands.server import server as server  # noqa: PLC0414
+    from .commands.upgrade import upgrade as upgrade  # noqa: PLC0414
 
-from .commands.codegen import codegen as cmd_codegen
-from .commands.export_schema import export_schema as cmd_export_schema
-from .commands.server import server as cmd_server
+    def run() -> None:
+        app()
 
+except ModuleNotFoundError as exc:
+    from strawberry.exceptions import MissingOptionalDependenciesError
 
-@click.group()
-def run():  # pragma: no cover
-    pass
-
-
-run.add_command(cmd_server)
-run.add_command(cmd_export_schema)
-run.add_command(cmd_codegen)
+    raise MissingOptionalDependenciesError(extras=["cli"]) from exc

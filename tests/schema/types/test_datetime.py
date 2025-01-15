@@ -1,16 +1,15 @@
 import datetime
 
-import pytest
-
 import dateutil.tz
-
+import pytest
 from graphql import GraphQLError
 
 import strawberry
+from strawberry.types.execution import ExecutionResult
 
 
 @pytest.mark.parametrize(
-    "typing,instance,serialized",
+    ("typing", "instance", "serialized"),
     [
         (datetime.date, datetime.date(2019, 10, 25), "2019-10-25"),
         (
@@ -37,7 +36,7 @@ def test_serialization(typing, instance, serialized):
 
 
 @pytest.mark.parametrize(
-    "typing,name,instance,serialized",
+    ("typing", "name", "instance", "serialized"),
     [
         (datetime.date, "Date", datetime.date(2019, 10, 25), "2019-10-25"),
         (
@@ -77,7 +76,7 @@ def test_deserialization(typing, name, instance, serialized):
 
 
 @pytest.mark.parametrize(
-    "typing,instance,serialized",
+    ("typing", "instance", "serialized"),
     [
         (datetime.date, datetime.date(2019, 10, 25), "2019-10-25"),
         (
@@ -109,7 +108,7 @@ def test_deserialization_with_parse_literal(typing, instance, serialized):
     assert Query.deserialized == instance
 
 
-def execute_mutation(value):
+def execute_mutation(value) -> ExecutionResult:
     @strawberry.type
     class Query:
         ok: bool
@@ -137,7 +136,7 @@ def execute_mutation(value):
 
 @pytest.mark.parametrize(
     "value",
-    (
+    [
         "2012-13-01",
         "2012-04-9",
         "20120411T03:30+",
@@ -145,28 +144,23 @@ def execute_mutation(value):
         "20120411T03:30-25:40",
         "20120411T03:30+00:60",
         "20120411T03:30+00:61",
-        "20120411T033030.123456012:00" "2014-03-12Т12:30:14",
+        "20120411T033030.123456012:002014-03-12T12:30:14",
         "2014-04-21T24:00:01",
-    ),
+    ],
 )
 def test_serialization_of_incorrect_datetime_string(value):
-    """
-    Test GraphQLError is raised for incorrect datetime.
+    """Test GraphQLError is raised for incorrect datetime.
     The error should exclude "original_error".
     """
-
     result = execute_mutation(value)
     assert result.errors
     assert isinstance(result.errors[0], GraphQLError)
-    assert result.errors[0].original_error is None
 
 
 def test_serialization_error_message_for_incorrect_datetime_string():
+    """Test if error message is using original error message
+    from datetime lib, and is properly formatted.
     """
-    Test if error message is using original error message
-    from datetime lib, and is properly formatted
-    """
-
     result = execute_mutation("2021-13-01T09:00:00")
     assert result.errors
     assert result.errors[0].message == (

@@ -1,25 +1,32 @@
-"""GraphQLWebSocketRouter
+"""GraphQLWebSocketRouter.
 
 This is a simple router class that might be better placed as part of Channels itself.
 It's a simple "SubProtocolRouter" that selects the websocket subprotocol based
 on preferences and client support. Then it hands off to the appropriate consumer.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
 from django.urls import re_path
 
 from channels.routing import ProtocolTypeRouter, URLRouter
-from strawberry.schema import BaseSchema
 
 from .handlers.http_handler import GraphQLHTTPConsumer
 from .handlers.ws_handler import GraphQLWSConsumer
 
+if TYPE_CHECKING:
+    from strawberry.schema import BaseSchema
+
 
 class GraphQLProtocolTypeRouter(ProtocolTypeRouter):
-    """
-    Convenience class to set up GraphQL on both HTTP and Websocket, optionally with a
-    Django application for all other HTTP routes:
+    """HTTP and Websocket GraphQL type router.
 
-    ```
+    Convenience class to set up GraphQL on both HTTP and Websocket,
+    optionally with a Django application for all other HTTP routes.
+
+    ```python
     from strawberry.channels import GraphQLProtocolTypeRouter
     from django.core.asgi import get_asgi_application
 
@@ -40,9 +47,9 @@ class GraphQLProtocolTypeRouter(ProtocolTypeRouter):
     def __init__(
         self,
         schema: BaseSchema,
-        django_application=None,
-        url_pattern="^graphql",
-    ):
+        django_application: Optional[str] = None,
+        url_pattern: str = "^graphql",
+    ) -> None:
         http_urls = [re_path(url_pattern, GraphQLHTTPConsumer.as_asgi(schema=schema))]
         if django_application is not None:
             http_urls.append(re_path("^", django_application))
@@ -57,3 +64,6 @@ class GraphQLProtocolTypeRouter(ProtocolTypeRouter):
                 ),
             }
         )
+
+
+__all__ = ["GraphQLProtocolTypeRouter"]

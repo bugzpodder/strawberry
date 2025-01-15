@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import cast
+from typing import Annotated, Union, cast
 
 from graphql import (
     DirectiveLocation,
@@ -10,10 +10,11 @@ from graphql import (
 )
 
 import strawberry
+from strawberry.directive import DirectiveValue
 from strawberry.scalars import JSON
 from strawberry.schema.schema_converter import GraphQLCoreConverter
 from strawberry.schema_directive import Location
-
+from strawberry.types.base import get_object_definition
 
 DEFINITION_BACKREF = GraphQLCoreConverter.DEFINITION_BACKREF
 
@@ -33,25 +34,25 @@ def test_extensions_schema_directive():
     # Schema
     assert graphql_schema.extensions[DEFINITION_BACKREF] is schema
 
-    """
-    FIXME: Apparently I stumbled on a bug:
-           SchemaDirective are used on schema.__str__(),
-           but aren't added to graphql_schema.directives
+    # TODO: Apparently I stumbled on a bug:
+    #        SchemaDirective are used on schema.__str__(),
+    #        but aren't added to graphql_schema.directives
+    # maybe graphql_schema_directive = graphql_schema.get_directive("schemaDirective")
 
-    graphql_scheme_directive = graphql_schema.get_directive("schemaDirective")
-    """
-    graphql_scheme_directive = schema.schema_converter.from_schema_directive(
-        Query._type_definition.directives[0]
+    directives = get_object_definition(Query, strict=True).directives
+    assert directives is not None
+    graphql_schema_directive = schema.schema_converter.from_schema_directive(
+        directives[0]
     )
     assert (
-        graphql_scheme_directive.extensions[DEFINITION_BACKREF]
+        graphql_schema_directive.extensions[DEFINITION_BACKREF]
         is SchemaDirective.__strawberry_directive__
     )
 
 
 def test_directive():
     @strawberry.directive(locations=[DirectiveLocation.FIELD])
-    def uppercase(value: str, foo: str):
+    def uppercase(value: DirectiveValue[str], foo: str):  # pragma: no cover
         return value.upper()
 
     @strawberry.type()
@@ -125,7 +126,7 @@ def test_interface():
 
     assert (
         graphql_schema.get_type("Thing").extensions[DEFINITION_BACKREF]
-        is Thing._type_definition
+        is Thing.__strawberry_definition__
     )
 
 
@@ -138,7 +139,7 @@ def test_union():
     class StrThing:
         value: str
 
-    SomeThing = strawberry.union("SomeThing", types=[JsonThing, StrThing])
+    SomeThing = Annotated[Union[JsonThing, StrThing], strawberry.union("SomeThing")]
 
     @strawberry.type()
     class Query:
@@ -146,10 +147,10 @@ def test_union():
 
     schema = strawberry.Schema(query=Query)
     graphql_schema: GraphQLSchema = schema._schema
+    graphql_type = graphql_schema.get_type("SomeThing")
 
-    assert (
-        graphql_schema.get_type("SomeThing").extensions[DEFINITION_BACKREF] is SomeThing
-    )
+    assert graphql_type.extensions[DEFINITION_BACKREF].graphql_name == "SomeThing"
+    assert graphql_type.extensions[DEFINITION_BACKREF].description is None
 
 
 def test_object_types():
@@ -160,31 +161,30 @@ def test_object_types():
     @strawberry.type()
     class Query:
         @strawberry.field
-        def hello(self, input: Input) -> str:
-            ...
+        def hello(self, input: Input) -> str: ...
 
     schema = strawberry.Schema(query=Query)
     graphql_schema: GraphQLSchema = schema._schema
 
     assert (
         graphql_schema.get_type("Input").extensions[DEFINITION_BACKREF]
-        is Input._type_definition
+        is Input.__strawberry_definition__
     )
     assert (
         graphql_schema.get_type("Query").extensions[DEFINITION_BACKREF]
-        is Query._type_definition
+        is Query.__strawberry_definition__
     )
 
-    graphql_query = cast(GraphQLObjectType, graphql_schema.get_type("Query"))
+    graphql_query = cast("GraphQLObjectType", graphql_schema.get_type("Query"))
     assert graphql_query.fields["hello"].extensions[
         DEFINITION_BACKREF
-    ] is Query._type_definition.get_field("hello")
+    ] is Query.__strawberry_definition__.get_field("hello")
     assert (
         graphql_query.fields["hello"].args["input"].extensions[DEFINITION_BACKREF]
-        is Query._type_definition.get_field("hello").arguments[0]
+        is Query.__strawberry_definition__.get_field("hello").arguments[0]
     )
 
     graphql_input = cast(GraphQLInputType, graphql_schema.get_type("Input"))
     assert graphql_input.fields["name"].extensions[
         DEFINITION_BACKREF
-    ] is Input._type_definition.get_field("name")
+    ] is Input.__strawberry_definition__.get_field("name")

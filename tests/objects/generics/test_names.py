@@ -1,17 +1,14 @@
 import textwrap
-from typing import Generic, List, NewType, TypeVar
+from typing import Annotated, Generic, NewType, TypeVar
 
 import pytest
 
-from typing_extensions import Annotated
-
 import strawberry
-from strawberry.enum import EnumDefinition
-from strawberry.lazy_type import LazyType
 from strawberry.schema.config import StrawberryConfig
-from strawberry.type import StrawberryList, StrawberryOptional
-from strawberry.union import StrawberryUnion
-
+from strawberry.types.base import StrawberryList, StrawberryOptional
+from strawberry.types.enum import EnumDefinition
+from strawberry.types.lazy_type import LazyType
+from strawberry.types.union import StrawberryUnion
 
 T = TypeVar("T")
 K = TypeVar("K")
@@ -33,7 +30,7 @@ class TypeB:
 
 
 @pytest.mark.parametrize(
-    "types,expected_name",
+    ("types", "expected_name"),
     [
         ([StrawberryList(str)], "StrListExample"),
         ([StrawberryList(StrawberryList(str))], "StrListListExample"),
@@ -58,7 +55,7 @@ def test_name_generation(types, expected_name):
     class Example(Generic[T]):
         a: T
 
-    type_definition = Example._type_definition  # type: ignore
+    type_definition = Example.__strawberry_definition__  # type: ignore
 
     assert config.name_converter.from_generic(type_definition, types) == expected_name
 
@@ -72,9 +69,9 @@ def test_nested_generics():
 
     @strawberry.type
     class Connection(Generic[T]):
-        edges: List[T]
+        edges: list[T]
 
-    type_definition = Connection._type_definition  # type: ignore
+    type_definition = Connection.__strawberry_definition__  # type: ignore
 
     assert (
         config.name_converter.from_generic(
@@ -89,7 +86,8 @@ def test_nested_generics():
 
 def test_nested_generics_aliases_with_schema():
     """This tests is similar to the previous test, but it also tests against
-    the schema, since the resolution of the type name might be different."""
+    the schema, since the resolution of the type name might be different.
+    """
     config = StrawberryConfig()
 
     @strawberry.type
@@ -101,7 +99,7 @@ def test_nested_generics_aliases_with_schema():
         key: K
         value: V
 
-    type_definition = Value._type_definition  # type: ignore
+    type_definition = Value.__strawberry_definition__  # type: ignore
 
     assert (
         config.name_converter.from_generic(
@@ -115,7 +113,7 @@ def test_nested_generics_aliases_with_schema():
 
     @strawberry.type
     class Query:
-        d: Value[List[DictItem[int, str]]]
+        d: Value[list[DictItem[int, str]]]
 
     schema = strawberry.Schema(query=Query)
 

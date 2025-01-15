@@ -1,6 +1,5 @@
 import datetime
 import decimal
-from typing import Dict
 from uuid import UUID
 
 from graphql import (
@@ -12,10 +11,11 @@ from graphql import (
     GraphQLString,
 )
 
-from strawberry.custom_scalar import ScalarDefinition
 from strawberry.file_uploads.scalars import Upload
+from strawberry.relay.types import GlobalID
 from strawberry.scalars import ID
 from strawberry.schema.types import base_scalars
+from strawberry.types.scalar import ScalarDefinition, scalar
 
 
 def _make_scalar_type(definition: ScalarDefinition) -> GraphQLScalarType:
@@ -44,11 +44,11 @@ def _make_scalar_definition(scalar_type: GraphQLScalarType) -> ScalarDefinition:
     )
 
 
-def _get_scalar_definition(scalar) -> ScalarDefinition:
-    return scalar._scalar_definition
+def _get_scalar_definition(scalar: type) -> ScalarDefinition:
+    return scalar._scalar_definition  # type: ignore[attr-defined]
 
 
-DEFAULT_SCALAR_REGISTRY: Dict[object, ScalarDefinition] = {
+DEFAULT_SCALAR_REGISTRY: dict[object, ScalarDefinition] = {
     type(None): _get_scalar_definition(base_scalars.Void),
     None: _get_scalar_definition(base_scalars.Void),
     str: _make_scalar_definition(GraphQLString),
@@ -62,4 +62,25 @@ DEFAULT_SCALAR_REGISTRY: Dict[object, ScalarDefinition] = {
     datetime.datetime: _get_scalar_definition(base_scalars.DateTime),
     datetime.time: _get_scalar_definition(base_scalars.Time),
     decimal.Decimal: _get_scalar_definition(base_scalars.Decimal),
+    # We can't wrap GlobalID with @scalar because it has custom attributes/methods
+    GlobalID: _get_scalar_definition(
+        scalar(
+            GlobalID,
+            name="GlobalID",
+            description=GraphQLID.description,
+            parse_literal=lambda v, vars=None: GlobalID.from_id(  # noqa: A006
+                GraphQLID.parse_literal(v, vars)
+            ),
+            parse_value=GlobalID.from_id,
+            serialize=str,
+            specified_by_url=("https://relay.dev/graphql/objectidentification.htm"),
+        )
+    ),
 }
+
+__all__ = [
+    "DEFAULT_SCALAR_REGISTRY",
+    "_get_scalar_definition",
+    "_make_scalar_definition",
+    "_make_scalar_type",
+]

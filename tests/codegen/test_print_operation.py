@@ -5,7 +5,6 @@ import pytest
 from strawberry.codegen import QueryCodegen
 from strawberry.codegen.plugins.print_operation import PrintOperationPlugin
 
-
 HERE = Path(__file__).parent
 QUERIES = list(HERE.glob("queries/*.graphql"))
 
@@ -15,7 +14,7 @@ def test_codegen(
     query: Path,
     schema,
 ):
-    generator = QueryCodegen(schema, plugins=[PrintOperationPlugin()])
+    generator = QueryCodegen(schema, plugins=[PrintOperationPlugin(query)])
     query_content = query.read_text()
 
     result = generator.run(query_content)

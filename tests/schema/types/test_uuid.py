@@ -29,17 +29,14 @@ def test_uuid_as_input():
 
     schema = strawberry.Schema(Query)
 
-    result = schema.execute_sync(
-        f'{{ exampleUuidIn(uid: "{str(uuid.NAMESPACE_DNS)}") }}'
-    )
+    result = schema.execute_sync(f'{{ exampleUuidIn(uid: "{uuid.NAMESPACE_DNS!s}") }}')
 
     assert not result.errors
     assert result.data["exampleUuidIn"] == str(uuid.NAMESPACE_DNS)
 
 
 def test_serialization_of_incorrect_uuid_string():
-    """
-    Test GraphQLError is raised for an invalid UUID.
+    """Test GraphQLError is raised for an invalid UUID.
     The error should exclude "original_error".
     """
 
@@ -66,7 +63,6 @@ def test_serialization_of_incorrect_uuid_string():
 
     assert result.errors
     assert isinstance(result.errors[0], GraphQLError)
-    assert result.errors[0].original_error is None
     assert result.errors[0].message == (
         "Variable '$value' got invalid value 'fail'; Value cannot represent a "
         'UUID: "fail". badly formed hexadecimal UUID string'

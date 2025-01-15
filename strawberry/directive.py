@@ -1,25 +1,58 @@
 from __future__ import annotations
 
 import dataclasses
-import inspect
-from typing import Any, Callable, List, Optional, TypeVar
-
-from typing_extensions import Annotated
+from functools import cached_property
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    TypeVar,
+)
 
 from graphql import DirectiveLocation
 
-from strawberry.arguments import StrawberryArgument
-from strawberry.field import StrawberryField
+from strawberry.types.field import StrawberryField
 from strawberry.types.fields.resolver import (
     INFO_PARAMSPEC,
     ReservedType,
     StrawberryResolver,
 )
-from strawberry.unset import UNSET
-from strawberry.utils.cached_property import cached_property
+from strawberry.types.unset import UNSET
+
+if TYPE_CHECKING:
+    import inspect
+
+    from strawberry.types.arguments import StrawberryArgument
 
 
-def directive_field(name: str, default: object = UNSET) -> Any:
+# TODO: should this be directive argument?
+def directive_field(
+    name: str,
+    default: object = UNSET,
+) -> Any:
+    """Function to add metadata to a directive argument, like the GraphQL name.
+
+    Args:
+        name: The GraphQL name of the directive argument
+        default: The default value of the argument
+
+    Returns:
+        A StrawberryField object that can be used to customise a directive argument
+
+    Example:
+    ```python
+    import strawberry
+    from strawberry.schema_directive import Location
+
+
+    @strawberry.schema_directive(locations=[Location.FIELD_DEFINITION])
+    class Sensitive:
+        reason: str = strawberry.directive_field(name="as")
+    ```
+    """
     return StrawberryField(
         python_name=None,
         graphql_name=name,
@@ -30,8 +63,7 @@ def directive_field(name: str, default: object = UNSET) -> Any:
 T = TypeVar("T")
 
 
-class StrawberryDirectiveValue:
-    ...
+class StrawberryDirectiveValue: ...
 
 
 DirectiveValue = Annotated[T, StrawberryDirectiveValue()]
@@ -44,7 +76,6 @@ VALUE_PARAMSPEC = ReservedType(name="value", type=StrawberryDirectiveValue)
 
 
 class StrawberryDirectiveResolver(StrawberryResolver[T]):
-
     RESERVED_PARAMSPEC = (
         INFO_PARAMSPEC,
         VALUE_PARAMSPEC,
@@ -56,26 +87,50 @@ class StrawberryDirectiveResolver(StrawberryResolver[T]):
 
 
 @dataclasses.dataclass
-class StrawberryDirective:
+class StrawberryDirective(Generic[T]):
     python_name: str
     graphql_name: Optional[str]
-    resolver: StrawberryDirectiveResolver
-    locations: List[DirectiveLocation]
+    resolver: StrawberryDirectiveResolver[T]
+    locations: list[DirectiveLocation]
     description: Optional[str] = None
 
     @cached_property
-    def arguments(self) -> List[StrawberryArgument]:
+    def arguments(self) -> list[StrawberryArgument]:
         return self.resolver.arguments
 
 
 def directive(
     *,
-    locations: List[DirectiveLocation],
+    locations: list[DirectiveLocation],
     description: Optional[str] = None,
     name: Optional[str] = None,
-) -> Callable[[Callable[..., T]], T]:
-    def _wrap(f: Callable[..., T]) -> T:
-        return StrawberryDirective(  # type: ignore
+) -> Callable[[Callable[..., T]], StrawberryDirective[T]]:
+    """Decorator to create a GraphQL operation directive.
+
+    Args:
+        locations: The locations where the directive can be used
+        description: The GraphQL description of the directive
+        name: The GraphQL name of the directive
+
+    Returns:
+        A StrawberryDirective object that can be used to customise a directive
+
+    Example:
+    ```python
+    import strawberry
+    from strawberry.directive import DirectiveLocation
+
+
+    @strawberry.directive(
+        locations=[DirectiveLocation.FIELD], description="Make string uppercase"
+    )
+    def turn_uppercase(value: str):
+        return value.upper()
+    ```
+    """
+
+    def _wrap(f: Callable[..., T]) -> StrawberryDirective[T]:
+        return StrawberryDirective(
             python_name=f.__name__,
             graphql_name=name,
             locations=locations,

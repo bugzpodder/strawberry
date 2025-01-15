@@ -1,7 +1,5 @@
-import pytest
-
 import strawberry
-from strawberry.extensions import Extension
+from strawberry.extensions import SchemaExtension
 
 
 @strawberry.type
@@ -15,8 +13,9 @@ def test_execution_context_operation_name_and_type():
     operation_name = None
     operation_type = None
 
-    class MyExtension(Extension):
-        def on_request_end(self):
+    class MyExtension(SchemaExtension):
+        def on_operation(self):
+            yield
             nonlocal operation_name
             nonlocal operation_type
 
@@ -58,8 +57,9 @@ def test_execution_context_operation_type_mutation():
     operation_name = None
     operation_type = None
 
-    class MyExtension(Extension):
-        def on_request_end(self):
+    class MyExtension(SchemaExtension):
+        def on_operation(self):
+            yield
             nonlocal operation_name
             nonlocal operation_type
 
@@ -107,8 +107,9 @@ def test_execution_context_operation_name_and_type_with_fragments():
     operation_name = None
     operation_type = None
 
-    class MyExtension(Extension):
-        def on_request_end(self):
+    class MyExtension(SchemaExtension):
+        def on_operation(self):
+            yield
             nonlocal operation_name
             nonlocal operation_type
 
@@ -138,8 +139,8 @@ def test_execution_context_operation_name_and_type_with_fragments():
 
 
 def test_error_when_accessing_operation_type_before_parsing():
-    class MyExtension(Extension):
-        def on_request_start(self):
+    class MyExtension(SchemaExtension):
+        def on_operation(self):
             execution_context = self.execution_context
 
             # This should raise a RuntimeError
@@ -147,13 +148,16 @@ def test_error_when_accessing_operation_type_before_parsing():
 
     schema = strawberry.Schema(Query, extensions=[MyExtension])
 
-    with pytest.raises(RuntimeError):
-        schema.execute_sync("mutation { myMutation }")
+    result = schema.execute_sync("mutation { myMutation }")
+    assert len(result.errors) == 1
+    assert isinstance(result.errors[0].original_error, RuntimeError)
+    assert result.errors[0].message == "No GraphQL document available"
 
 
 def test_error_when_accessing_operation_type_with_invalid_operation_name():
-    class MyExtension(Extension):
-        def on_parsing_end(self):
+    class MyExtension(SchemaExtension):
+        def on_parse(self):
+            yield
             execution_context = self.execution_context
 
             # This should raise a RuntimeError
@@ -161,5 +165,7 @@ def test_error_when_accessing_operation_type_with_invalid_operation_name():
 
     schema = strawberry.Schema(Query, extensions=[MyExtension])
 
-    with pytest.raises(RuntimeError):
-        schema.execute_sync("query { ping }", operation_name="MyQuery")
+    result = schema.execute_sync("query { ping }", operation_name="MyQuery")
+    assert len(result.errors) == 1
+    assert isinstance(result.errors[0].original_error, RuntimeError)
+    assert result.errors[0].message == "Can't get GraphQL operation type"

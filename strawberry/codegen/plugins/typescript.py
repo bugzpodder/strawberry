@@ -1,22 +1,26 @@
+from __future__ import annotations
+
 import textwrap
-from typing import List
+from typing import TYPE_CHECKING, ClassVar
 
 from strawberry.codegen import CodegenFile, QueryCodegenPlugin
 from strawberry.codegen.types import (
     GraphQLEnum,
-    GraphQLField,
     GraphQLList,
     GraphQLObjectType,
-    GraphQLOperation,
     GraphQLOptional,
     GraphQLScalar,
-    GraphQLType,
     GraphQLUnion,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from strawberry.codegen.types import GraphQLField, GraphQLOperation, GraphQLType
+
 
 class TypeScriptPlugin(QueryCodegenPlugin):
-    SCALARS_TO_TS_TYPE = {
+    SCALARS_TO_TS_TYPE: ClassVar[dict[str | type, str]] = {
         "ID": "string",
         "Int": "number",
         "String": "string",
@@ -31,16 +35,19 @@ class TypeScriptPlugin(QueryCodegenPlugin):
         float: "number",
     }
 
+    def __init__(self, query: Path) -> None:
+        self.outfile_name: str = query.with_suffix(".ts").name
+        self.query = query
+
     def generate_code(
-        self, types: List[GraphQLType], operation: GraphQLOperation
-    ) -> List[CodegenFile]:
+        self, types: list[GraphQLType], operation: GraphQLOperation
+    ) -> list[CodegenFile]:
         printed_types = list(filter(None, (self._print_type(type) for type in types)))
 
-        return [CodegenFile("types.ts", "\n\n".join(printed_types))]
+        return [CodegenFile(self.outfile_name, "\n\n".join(printed_types))]
 
     def _get_type_name(self, type_: GraphQLType) -> str:
         if isinstance(type_, GraphQLOptional):
-
             return f"{self._get_type_name(type_.of_type)} | undefined"
 
         if isinstance(type_, GraphQLList):
@@ -95,6 +102,7 @@ class TypeScriptPlugin(QueryCodegenPlugin):
         if type_.name in self.SCALARS_TO_TS_TYPE:
             return ""
 
+        assert type_.python_type is not None
         return f"type {type_.name} = {self.SCALARS_TO_TS_TYPE[type_.python_type]}"
 
     def _print_union_type(self, type_: GraphQLUnion) -> str:

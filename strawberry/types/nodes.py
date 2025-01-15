@@ -1,7 +1,7 @@
-"""
-Abstraction layer for graphql-core field nodes.
+"""Abstraction layer for graphql-core field nodes.
 
-Call `convert_sections` on a list of GraphQL `FieldNode`s, such as in `info.field_nodes`.
+Call `convert_sections` on a list of GraphQL `FieldNode`s,
+such as in `info.field_nodes`.
 
 If a node has only one useful value, it's value is inlined.
 
@@ -9,26 +9,27 @@ If a list of nodes have unique names, it's transformed into a mapping.
 Note Python dicts maintain ordering (for all supported versions).
 """
 
+from __future__ import annotations
+
 import dataclasses
-from typing import Any, Collection, Dict, Iterable, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
-from graphql import GraphQLResolveInfo
-from graphql.language import (
-    ArgumentNode as GQLArgumentNode,
-    DirectiveNode as GQLDirectiveNode,
-    FieldNode as GQLFieldNode,
-    FragmentSpreadNode as GQLFragmentSpreadNode,
-    InlineFragmentNode as GQLInlineFragment,
-    InlineFragmentNode as GQLInlineFragmentNode,
-    ListValueNode as GQLListValueNode,
-    ObjectValueNode as GQLObjectValueNode,
-    ValueNode as GQLValueNode,
-    VariableNode as GQLVariableNode,
-)
+from graphql.language import FieldNode as GQLFieldNode
+from graphql.language import FragmentSpreadNode as GQLFragmentSpreadNode
+from graphql.language import InlineFragmentNode as GQLInlineFragmentNode
+from graphql.language import ListValueNode as GQLListValueNode
+from graphql.language import ObjectValueNode as GQLObjectValueNode
+from graphql.language import VariableNode as GQLVariableNode
 
+if TYPE_CHECKING:
+    from collections.abc import Collection, Iterable
 
-Arguments = Dict[str, Any]
-Directives = Dict[str, Arguments]
+    from graphql import GraphQLResolveInfo
+    from graphql.language import ArgumentNode as GQLArgumentNode
+    from graphql.language import DirectiveNode as GQLDirectiveNode
+    from graphql.language import ValueNode as GQLValueNode
+Arguments = dict[str, Any]
+Directives = dict[str, Arguments]
 Selection = Union["SelectedField", "FragmentSpread", "InlineFragment"]
 
 
@@ -63,13 +64,13 @@ def convert_directives(
 
 def convert_selections(
     info: GraphQLResolveInfo, field_nodes: Collection[GQLFieldNode]
-) -> List[Selection]:
+) -> list[Selection]:
     """Return typed `Selection` based on node type."""
-    selections: List[Selection] = []
+    selections: list[Selection] = []
     for node in field_nodes:
         if isinstance(node, GQLFieldNode):
             selections.append(SelectedField.from_node(info, node))
-        elif isinstance(node, GQLInlineFragment):
+        elif isinstance(node, GQLInlineFragmentNode):
             selections.append(InlineFragment.from_node(info, node))
         elif isinstance(node, GQLFragmentSpreadNode):
             selections.append(FragmentSpread.from_node(info, node))
@@ -86,10 +87,14 @@ class FragmentSpread:
     name: str
     type_condition: str
     directives: Directives
-    selections: List[Selection]
+    selections: list[Selection]
 
     @classmethod
-    def from_node(cls, info: GraphQLResolveInfo, node: GQLFragmentSpreadNode):
+    def from_node(
+        cls,
+        info: GraphQLResolveInfo,
+        node: GQLFragmentSpreadNode,
+    ) -> FragmentSpread:
         # Look up fragment
         name = node.name.value
         fragment = info.fragments[name]
@@ -108,11 +113,15 @@ class InlineFragment:
     """Wrapper for a InlineFragmentNode."""
 
     type_condition: str
-    selections: List[Selection]
+    selections: list[Selection]
     directives: Directives
 
     @classmethod
-    def from_node(cls, info: GraphQLResolveInfo, node: GQLInlineFragmentNode):
+    def from_node(
+        cls,
+        info: GraphQLResolveInfo,
+        node: GQLInlineFragmentNode,
+    ) -> InlineFragment:
         return cls(
             type_condition=node.type_condition.name.value,
             selections=convert_selections(
@@ -129,11 +138,11 @@ class SelectedField:
     name: str
     directives: Directives
     arguments: Arguments
-    selections: List[Selection]
+    selections: list[Selection]
     alias: Optional[str] = None
 
     @classmethod
-    def from_node(cls, info: GraphQLResolveInfo, node: GQLFieldNode):
+    def from_node(cls, info: GraphQLResolveInfo, node: GQLFieldNode) -> SelectedField:
         return cls(
             name=node.name.value,
             directives=convert_directives(info, node.directives),
@@ -143,3 +152,6 @@ class SelectedField:
                 info, getattr(node.selection_set, "selections", [])
             ),
         )
+
+
+__all__ = ["FragmentSpread", "InlineFragment", "SelectedField", "convert_selections"]

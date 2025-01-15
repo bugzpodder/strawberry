@@ -1,14 +1,15 @@
 import textwrap
 from enum import Enum
-from typing import List, Optional
-
-from typing_extensions import Annotated
+from typing import Annotated, Any, Optional, Union
 
 import strawberry
+from strawberry import BasePermission, Info
+from strawberry.permission import PermissionExtension
 from strawberry.printer import print_schema
 from strawberry.schema.config import StrawberryConfig
 from strawberry.schema_directive import Location
-from strawberry.unset import UNSET
+from strawberry.types.unset import UNSET
+from tests.conftest import skip_if_gql_32
 
 
 def test_print_simple_directive():
@@ -59,6 +60,7 @@ def test_print_directive_with_name():
     assert print_schema(schema) == textwrap.dedent(expected_output).strip()
 
 
+@skip_if_gql_32("formatting is different in gql 3.2")
 def test_directive_on_types():
     @strawberry.input
     class SensitiveValue:
@@ -68,12 +70,12 @@ def test_directive_on_types():
     @strawberry.schema_directive(locations=[Location.OBJECT, Location.FIELD_DEFINITION])
     class SensitiveData:
         reason: str
-        meta: Optional[List[SensitiveValue]] = UNSET
+        meta: Optional[list[SensitiveValue]] = UNSET
 
     @strawberry.schema_directive(locations=[Location.INPUT_OBJECT])
     class SensitiveInput:
         reason: str
-        meta: Optional[List[SensitiveValue]] = UNSET
+        meta: Optional[list[SensitiveValue]] = UNSET
 
     @strawberry.schema_directive(locations=[Location.INPUT_FIELD_DEFINITION])
     class RangeInput:
@@ -133,7 +135,7 @@ def test_directive_on_types():
     type User @sensitiveData(reason: "GDPR") {
       firstName: String!
       age: Int!
-      phone: String! @sensitiveData(reason: "PRIVATE", meta: [{key: "can_share_field", value: "phone_share_accepted"}])
+      phone: String! @sensitiveData(reason: "PRIVATE", meta: [{ key: "can_share_field", value: "phone_share_accepted" }])
       phoneShareAccepted: Boolean!
     }
 
@@ -141,7 +143,7 @@ def test_directive_on_types():
       key: String!
       value: String!
     }
-    """  # noqa:E501
+    """
 
     schema = strawberry.Schema(query=Query)
 
@@ -167,7 +169,7 @@ def test_using_different_names_for_directive_field():
     type Query {
       firstName: String! @sensitive(as: "GDPR", realAge: "1", real_age: "2")
     }
-    """  # noqa:E501
+    """
 
     schema = strawberry.Schema(query=Query)
 
@@ -225,7 +227,7 @@ def test_respects_schema_parameter_types_for_arguments_int():
 def test_respects_schema_parameter_types_for_arguments_list_of_ints():
     @strawberry.schema_directive(locations=[Location.FIELD_DEFINITION])
     class Sensitive:
-        real_age: List[int]
+        real_age: list[int]
 
     @strawberry.type
     class Query:
@@ -249,7 +251,7 @@ def test_respects_schema_parameter_types_for_arguments_list_of_ints():
 def test_respects_schema_parameter_types_for_arguments_list_of_strings():
     @strawberry.schema_directive(locations=[Location.FIELD_DEFINITION])
     class Sensitive:
-        real_age: List[str]
+        real_age: list[str]
 
     @strawberry.type
     class Query:
@@ -324,6 +326,7 @@ def test_prints_multiple_directives_on_schema():
     assert print_schema(schema) == textwrap.dedent(expected_output).strip()
 
 
+@skip_if_gql_32("formatting is different in gql 3.2")
 def test_prints_with_types():
     @strawberry.input
     class SensitiveConfiguration:
@@ -343,7 +346,7 @@ def test_prints_with_types():
     directive @sensitive(config: SensitiveConfiguration!) on FIELD_DEFINITION
 
     type Query {
-      firstName: String! @sensitive(config: {reason: "example"})
+      firstName: String! @sensitive(config: { reason: "example" })
     }
 
     input SensitiveConfiguration {
@@ -386,6 +389,8 @@ def test_prints_with_enum():
     @strawberry.enum
     class Reason(str, Enum):
         EXAMPLE = "example"
+
+        __slots__ = ()
 
     @strawberry.schema_directive(locations=[Location.FIELD_DEFINITION])
     class Sensitive:
@@ -473,6 +478,8 @@ def test_print_directive_on_enum():
     class SomeEnum(str, Enum):
         EXAMPLE = "example"
 
+        __slots__ = ()
+
     @strawberry.type
     class Query:
         first_name: SomeEnum
@@ -526,6 +533,71 @@ def test_print_directive_on_enum_value():
     assert print_schema(schema) == textwrap.dedent(expected_output).strip()
 
 
+def test_dedupe_multiple_equal_directives():
+    class MemberRoleRequired(BasePermission):
+        message = "Keine Rechte"
+
+        def has_permission(self, source, info: Info, **kwargs: Any) -> bool:
+            return True
+
+    @strawberry.interface
+    class MyInterface:
+        id: strawberry.ID
+
+        @strawberry.field(
+            extensions=[PermissionExtension(permissions=[MemberRoleRequired()])]
+        )
+        def hello(self, info: Info) -> str:
+            return "world"
+
+    @strawberry.type
+    class MyType1(MyInterface):
+        name: str
+
+    @strawberry.type
+    class MyType2(MyInterface):
+        age: int
+
+    @strawberry.type
+    class Query:
+        @strawberry.field
+        def my_type(self, info: Info) -> MyInterface:
+            return MyType1(id=strawberry.ID("1"), name="Hello")
+
+    expected_output = """
+    directive @memberRoleRequired on FIELD_DEFINITION
+
+    interface MyInterface {
+      id: ID!
+      hello: String! @memberRoleRequired
+    }
+
+    type MyType1 implements MyInterface {
+      id: ID!
+      hello: String! @memberRoleRequired
+      name: String!
+    }
+
+    type MyType2 implements MyInterface {
+      id: ID!
+      hello: String! @memberRoleRequired
+      age: Int!
+    }
+
+    type Query {
+      myType: MyInterface!
+    }
+    """
+
+    schema = strawberry.Schema(Query, types=[MyType1, MyType2])
+
+    assert print_schema(schema) == textwrap.dedent(expected_output).strip()
+
+    retval = schema.execute_sync("{ myType { id hello } }")
+    assert retval.errors is None
+    assert retval.data == {"myType": {"id": "1", "hello": "world"}}
+
+
 def test_print_directive_on_union():
     @strawberry.type
     class A:
@@ -539,11 +611,14 @@ def test_print_directive_on_union():
     class Sensitive:
         reason: str
 
-    Union = strawberry.union("Union", (A, B), directives=[Sensitive(reason="example")])
+    MyUnion = Annotated[
+        Union[A, B],
+        strawberry.union(name="MyUnion", directives=[Sensitive(reason="example")]),
+    ]
 
     @strawberry.type
     class Query:
-        example: Union
+        example: MyUnion
 
     expected_output = """
     directive @sensitive(reason: String!) on SCALAR
@@ -556,11 +631,11 @@ def test_print_directive_on_union():
       b: Int!
     }
 
-    type Query {
-      example: Union!
-    }
+    union MyUnion @sensitive(reason: "example") = A | B
 
-    union Union @sensitive(reason: "example") = A | B
+    type Query {
+      example: MyUnion!
+    }
     """
 
     schema = strawberry.Schema(query=Query)

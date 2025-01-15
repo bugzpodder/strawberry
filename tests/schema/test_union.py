@@ -1,14 +1,14 @@
 import sys
+import textwrap
 from dataclasses import dataclass
 from textwrap import dedent
-from typing import Generic, List, Optional, TypeVar, Union
+from typing import Annotated, Generic, Optional, TypeVar, Union
 
 import pytest
 
-from typing_extensions import Annotated
-
 import strawberry
-from strawberry.lazy_type import lazy
+from strawberry.exceptions import InvalidUnionTypeError
+from strawberry.types.lazy_type import lazy
 
 
 def test_union_as_field():
@@ -184,7 +184,7 @@ def test_types_not_included_in_the_union_are_rejected():
 
     assert (
         result.errors[0].message == "The type "
-        "\"<class 'tests.schema.test_union.test_types_not_included_in_the_union_are_rejected.<locals>.Outside'>\""  # noqa
+        "\"<class 'tests.schema.test_union.test_types_not_included_in_the_union_are_rejected.<locals>.Outside'>\""
         ' of the field "hello" '
         "is not in the list of the types of the union: \"['A', 'B']\""
     )
@@ -235,7 +235,7 @@ def test_named_union():
     class B:
         b: int
 
-    Result = strawberry.union("Result", (A, B))
+    Result = Annotated[Union[A, B], strawberry.union(name="Result")]
 
     @strawberry.type
     class Query:
@@ -274,7 +274,9 @@ def test_named_union_description():
     class B:
         b: int
 
-    Result = strawberry.union("Result", (A, B), description="Example Result")
+    Result = Annotated[
+        Union[A, B], strawberry.union(name="Result", description="Example Result")
+    ]
 
     @strawberry.type
     class Query:
@@ -313,7 +315,7 @@ def test_can_use_union_in_optional():
     class B:
         b: int
 
-    Result = strawberry.union("Result", (A, B))
+    Result = Annotated[Union[A, B], strawberry.union(name="Result")]
 
     @strawberry.type
     class Query:
@@ -397,7 +399,7 @@ def test_union_used_multiple_times():
     class B:
         b: int
 
-    MyUnion = strawberry.union("MyUnion", types=(A, B))
+    MyUnion = Annotated[Union[A, B], strawberry.union("MyUnion")]
 
     @strawberry.type
     class Query:
@@ -442,7 +444,7 @@ def test_union_explicit_type_resolution():
     class B:
         b: int
 
-    MyUnion = strawberry.union("MyUnion", types=(A, B))
+    MyUnion = Annotated[Union[A, B], strawberry.union("MyUnion")]
 
     @strawberry.type
     class Query:
@@ -464,8 +466,7 @@ def test_union_explicit_type_resolution():
     reason="pipe syntax for union is only available on python 3.10+",
 )
 def test_union_optional_with_or_operator():
-    """
-    Verify that the `|` operator is supported when annotating unions as
+    """Verify that the `|` operator is supported when annotating unions as
     optional in schemas.
     """
 
@@ -477,7 +478,7 @@ def test_union_optional_with_or_operator():
     class Dog:
         name: str
 
-    animal_union = strawberry.union("Animal", (Cat, Dog))
+    animal_union = Annotated[Cat | Dog, strawberry.union("Animal")]
 
     @strawberry.type
     class Query:
@@ -499,9 +500,7 @@ def test_union_optional_with_or_operator():
 
 
 def test_union_with_input_types():
-    """
-    Verify that union of input types raises an error
-    """
+    """Verify that union of input types raises an error."""
 
     @strawberry.type
     class User:
@@ -521,22 +520,20 @@ def test_union_with_input_types():
         name: str
         something: Union[A, B]
 
+    @strawberry.type
+    class Query:
+        @strawberry.field
+        def user(self, data: Input) -> User:
+            return User(name=data.name, age=100)
+
     with pytest.raises(
         TypeError, match="Union for A is not supported because it is an Input type"
     ):
-
-        @strawberry.type
-        class Query:
-            @strawberry.field
-            def user(self, data: Input) -> User:
-                return User(name=data.name, age=100)
-
         strawberry.Schema(query=Query)
 
 
 def test_union_with_similar_nested_generic_types():
-    """
-    Previously this failed due to an edge case where Strawberry would choose AContainer
+    """Previously this failed due to an edge case where Strawberry would choose AContainer
     as the resolved type for container_b due to the inability to exactly match the
     nested generic `Container.items`.
     """
@@ -544,7 +541,7 @@ def test_union_with_similar_nested_generic_types():
 
     @strawberry.type
     class Container(Generic[T]):
-        items: List[T]
+        items: list[T]
 
     @strawberry.type
     class A:
@@ -608,9 +605,7 @@ def test_union_with_similar_nested_generic_types():
 
 
 def test_lazy_union():
-    """
-    Previously this failed to evaluate generic parameters on lazy types
-    """
+    """Previously this failed to evaluate generic parameters on lazy types"""
     TypeA = Annotated["TypeA", lazy("tests.schema.test_lazy_types.type_a")]
     TypeB = Annotated["TypeB", lazy("tests.schema.test_lazy_types.type_b")]
 
@@ -645,3 +640,203 @@ def test_lazy_union():
 
     assert result.data["a"]["__typename"] == "TypeA"
     assert result.data["b"]["__typename"] == "TypeB"
+
+
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError, match="Type `int` cannot be used in a GraphQL Union"
+)
+def test_error_with_invalid_annotated_type():
+    @strawberry.type
+    class Something:
+        h: str
+
+    AnnotatedInt = Annotated[int, "something_else"]
+
+    @strawberry.type
+    class Query:
+        union: Union[Something, AnnotatedInt]
+
+    strawberry.Schema(query=Query)
+
+
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError, match="Type `int` cannot be used in a GraphQL Union"
+)
+def test_raises_on_union_with_int():
+    global ICanBeInUnion
+
+    @strawberry.type
+    class ICanBeInUnion:
+        foo: str
+
+    @strawberry.type
+    class Query:
+        union: Union[ICanBeInUnion, int]
+
+    strawberry.Schema(query=Query)
+
+    del ICanBeInUnion
+
+
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError,
+    match=r"Type `list\[...\]` cannot be used in a GraphQL Union",
+)
+def test_raises_on_union_with_list_str():
+    global ICanBeInUnion
+
+    @strawberry.type
+    class ICanBeInUnion:
+        foo: str
+
+    @strawberry.type
+    class Query:
+        union: Union[ICanBeInUnion, list[str]]
+
+    strawberry.Schema(query=Query)
+
+    del ICanBeInUnion
+
+
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError,
+    match=r"Type `list\[...\]` cannot be used in a GraphQL Union",
+)
+def test_raises_on_union_with_list_str_38():
+    global ICanBeInUnion
+
+    @strawberry.type
+    class ICanBeInUnion:
+        foo: str
+
+    @strawberry.type
+    class Query:
+        union: Union[ICanBeInUnion, list[str]]
+
+    strawberry.Schema(query=Query)
+
+    del ICanBeInUnion
+
+
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError, match="Type `Always42` cannot be used in a GraphQL Union"
+)
+def test_raises_on_union_of_custom_scalar():
+    @strawberry.type
+    class ICanBeInUnion:
+        foo: str
+
+    @strawberry.scalar(serialize=lambda x: 42, parse_value=lambda x: Always42())
+    class Always42:
+        pass
+
+    @strawberry.type
+    class Query:
+        union: Annotated[
+            Union[Always42, ICanBeInUnion], strawberry.union(name="ExampleUnion")
+        ]
+
+    strawberry.Schema(query=Query)
+
+
+def test_union_of_unions():
+    @strawberry.type
+    class User:
+        name: str
+
+    @strawberry.type
+    class Error:
+        name: str
+
+    @strawberry.type
+    class SpecificError:
+        name: str
+
+    @strawberry.type
+    class EvenMoreSpecificError:
+        name: str
+
+    ErrorUnion = Union[SpecificError, EvenMoreSpecificError]
+
+    @strawberry.type
+    class Query:
+        user: Union[User, Error]
+        error: Union[User, ErrorUnion]
+
+    schema = strawberry.Schema(query=Query)
+
+    expected_schema = textwrap.dedent(
+        """
+        type Error {
+          name: String!
+        }
+
+        type EvenMoreSpecificError {
+          name: String!
+        }
+
+        type Query {
+          user: UserError!
+          error: UserSpecificErrorEvenMoreSpecificError!
+        }
+
+        type SpecificError {
+          name: String!
+        }
+
+        type User {
+          name: String!
+        }
+
+        union UserError = User | Error
+
+        union UserSpecificErrorEvenMoreSpecificError = User | SpecificError | EvenMoreSpecificError
+        """
+    ).strip()
+
+    assert str(schema) == expected_schema
+
+
+def test_single_union():
+    @strawberry.type
+    class A:
+        a: int = 5
+
+    @strawberry.type
+    class Query:
+        something: Annotated[A, strawberry.union(name="Something")] = strawberry.field(
+            default_factory=A
+        )
+
+    schema = strawberry.Schema(query=Query)
+    query = """{
+        something {
+            __typename,
+
+            ... on A {
+                a
+            }
+        }
+    }"""
+
+    assert (
+        str(schema)
+        == textwrap.dedent(
+            """
+        type A {
+          a: Int!
+        }
+
+        type Query {
+          something: Something!
+        }
+
+        union Something = A
+        """
+        ).strip()
+    )
+
+    result = schema.execute_sync(query, root_value=Query())
+
+    assert not result.errors
+    assert result.data["something"] == {"__typename": "A", "a": 5}

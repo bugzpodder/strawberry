@@ -1,8 +1,6 @@
 import textwrap
 from enum import Enum
-from typing import List
-
-from typing_extensions import Annotated
+from typing import Annotated, Union
 
 import strawberry
 
@@ -23,13 +21,13 @@ def test_field_tag_printed_correctly():
         @strawberry.field
         def top_products(
             self, first: Annotated[int, strawberry.federation.argument(tags=["myTag"])]
-        ) -> List[Product]:
+        ) -> list[Product]:  # pragma: no cover
             return []
 
     schema = strawberry.federation.Schema(query=Query, enable_federation_2=True)
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@external", "@tag"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@external", "@tag"]) {
           query: Query
         }
 
@@ -60,7 +58,7 @@ def test_field_tag_printed_correctly():
 def test_field_tag_printed_correctly_on_scalar():
     @strawberry.federation.scalar(tags=["myTag", "anotherTag"])
     class SomeScalar(str):
-        ...
+        __slots__ = ()
 
     @strawberry.federation.type
     class Query:
@@ -69,7 +67,7 @@ def test_field_tag_printed_correctly_on_scalar():
     schema = strawberry.federation.Schema(query=Query, enable_federation_2=True)
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@tag"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@tag"]) {
           query: Query
         }
 
@@ -102,7 +100,7 @@ def test_field_tag_printed_correctly_on_enum():
     schema = strawberry.federation.Schema(query=Query, enable_federation_2=True)
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@tag"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@tag"]) {
           query: Query
         }
 
@@ -137,7 +135,7 @@ def test_field_tag_printed_correctly_on_enum_value():
     schema = strawberry.federation.Schema(query=Query, enable_federation_2=True)
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@tag"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@tag"]) {
           query: Query
         }
 
@@ -169,16 +167,18 @@ def test_field_tag_printed_correctly_on_union():
     class B:
         b: str
 
-    Union = strawberry.federation.union("Union", (A, B), tags=["myTag", "anotherTag"])
+    MyUnion = Annotated[
+        Union[A, B], strawberry.federation.union("Union", tags=["myTag", "anotherTag"])
+    ]
 
     @strawberry.federation.type
     class Query:
-        hello: Union
+        hello: MyUnion
 
     schema = strawberry.federation.Schema(query=Query, enable_federation_2=True)
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@tag"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@tag"]) {
           query: Query
         }
 
@@ -221,7 +221,7 @@ def test_tag_printed_correctly_on_inputs():
     )
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@tag"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@tag"]) {
           query: Query
         }
 

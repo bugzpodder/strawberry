@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from dataclasses import (  # type: ignore
     _FIELD,
@@ -6,11 +8,12 @@ from dataclasses import (  # type: ignore
     _POST_INIT_NAME,
     _set_new_attribute,
 )
+from typing import Any
 
 from strawberry.ext.dataclasses.dataclasses import dataclass_init_fn
 
 
-def add_custom_init_fn(cls):
+def add_custom_init_fn(cls: Any) -> None:
     fields = [
         f
         for f in getattr(cls, _FIELDS).values()
@@ -29,3 +32,6 @@ def add_custom_init_fn(cls):
             globals_=globals_,
         ),
     )
+
+
+__all__ = ["add_custom_init_fn"]

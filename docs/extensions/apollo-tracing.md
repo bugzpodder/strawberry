@@ -1,12 +1,14 @@
 ---
-title: ApolloTracingExtension
+title: Apollo Tracing
 summary: Add Apollo tracing to your GraphQL server.
 tags: tracing
 ---
 
 # `ApolloTracingExtension`
 
-This extension adds [tracing information](https://github.com/apollographql/apollo-tracing) to your response for [Apollo Engine](https://www.apollographql.com/platform/).
+This extension adds
+[tracing information](https://github.com/apollographql/apollo-tracing) to your
+response for [Apollo Engine](https://www.apollographql.com/platform/).
 
 ## Usage example:
 
@@ -18,13 +20,14 @@ schema = strawberry.Schema(
     Query,
     extensions=[
         ApolloTracingExtension,
-    ]
+    ],
 )
 ```
 
 <Note>
 
-If you are not running in an Async context then you'll need to use the sync version:
+If you are not running in an Async context then you'll need to use the sync
+version:
 
 ```python
 import strawberry
@@ -34,7 +37,7 @@ schema = strawberry.Schema(
     Query,
     extensions=[
         ApolloTracingExtensionSync,
-    ]
+    ],
 )
 ```
 

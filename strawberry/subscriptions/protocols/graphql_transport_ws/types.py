@@ -1,107 +1,101 @@
-from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import TypedDict, Union
+from typing_extensions import Literal, NotRequired
 
 from graphql import GraphQLFormattedError
 
-from strawberry.unset import UNSET
+
+class ConnectionInitMessage(TypedDict):
+    """Direction: Client -> Server."""
+
+    type: Literal["connection_init"]
+    payload: NotRequired[Union[dict[str, object], None]]
 
 
-@dataclass
-class GraphQLTransportMessage:
-    def as_dict(self) -> dict:
-        data = asdict(self)
-        if getattr(self, "payload", None) is UNSET:
-            # Unset fields must have a JSON value of "undefined" not "null"
-            data.pop("payload")
-        return data
+class ConnectionAckMessage(TypedDict):
+    """Direction: Server -> Client."""
+
+    type: Literal["connection_ack"]
+    payload: NotRequired[Union[dict[str, object], None]]
 
 
-@dataclass
-class ConnectionInitMessage(GraphQLTransportMessage):
-    """
-    Direction: Client -> Server
-    """
+class PingMessage(TypedDict):
+    """Direction: bidirectional."""
 
-    payload: Optional[Dict[str, Any]] = UNSET
-    type: str = "connection_init"
+    type: Literal["ping"]
+    payload: NotRequired[Union[dict[str, object], None]]
 
 
-@dataclass
-class ConnectionAckMessage(GraphQLTransportMessage):
-    """
-    Direction: Server -> Client
-    """
+class PongMessage(TypedDict):
+    """Direction: bidirectional."""
 
-    payload: Optional[Dict[str, Any]] = UNSET
-    type: str = "connection_ack"
+    type: Literal["pong"]
+    payload: NotRequired[Union[dict[str, object], None]]
 
 
-@dataclass
-class PingMessage(GraphQLTransportMessage):
-    """
-    Direction: bidirectional
-    """
-
-    payload: Optional[Dict[str, Any]] = UNSET
-    type: str = "ping"
-
-
-@dataclass
-class PongMessage(GraphQLTransportMessage):
-    """
-    Direction: bidirectional
-    """
-
-    payload: Optional[Dict[str, Any]] = UNSET
-    type: str = "pong"
-
-
-@dataclass
-class SubscribeMessagePayload:
+class SubscribeMessagePayload(TypedDict):
+    operationName: NotRequired[Union[str, None]]
     query: str
-    operationName: Optional[str] = None
-    variables: Optional[Dict[str, Any]] = None
-    extensions: Optional[Dict[str, Any]] = None
+    variables: NotRequired[Union[dict[str, object], None]]
+    extensions: NotRequired[Union[dict[str, object], None]]
 
 
-@dataclass
-class SubscribeMessage(GraphQLTransportMessage):
-    """
-    Direction: Client -> Server
-    """
+class SubscribeMessage(TypedDict):
+    """Direction: Client -> Server."""
 
     id: str
+    type: Literal["subscribe"]
     payload: SubscribeMessagePayload
-    type: str = "subscribe"
 
 
-@dataclass
-class NextMessage(GraphQLTransportMessage):
-    """
-    Direction: Server -> Client
-    """
-
-    id: str
-    payload: Dict[str, Any]  # TODO: shape like ExecutionResult
-    type: str = "next"
+class NextMessagePayload(TypedDict):
+    errors: NotRequired[list[GraphQLFormattedError]]
+    data: NotRequired[Union[dict[str, object], None]]
+    extensions: NotRequired[dict[str, object]]
 
 
-@dataclass
-class ErrorMessage(GraphQLTransportMessage):
-    """
-    Direction: Server -> Client
-    """
+class NextMessage(TypedDict):
+    """Direction: Server -> Client."""
 
     id: str
-    payload: List[GraphQLFormattedError]
-    type: str = "error"
+    type: Literal["next"]
+    payload: NextMessagePayload
 
 
-@dataclass
-class CompleteMessage(GraphQLTransportMessage):
-    """
-    Direction: bidirectional
-    """
+class ErrorMessage(TypedDict):
+    """Direction: Server -> Client."""
 
     id: str
-    type: str = "complete"
+    type: Literal["error"]
+    payload: list[GraphQLFormattedError]
+
+
+class CompleteMessage(TypedDict):
+    """Direction: bidirectional."""
+
+    id: str
+    type: Literal["complete"]
+
+
+Message = Union[
+    ConnectionInitMessage,
+    ConnectionAckMessage,
+    PingMessage,
+    PongMessage,
+    SubscribeMessage,
+    NextMessage,
+    ErrorMessage,
+    CompleteMessage,
+]
+
+
+__all__ = [
+    "CompleteMessage",
+    "ConnectionAckMessage",
+    "ConnectionInitMessage",
+    "ErrorMessage",
+    "Message",
+    "NextMessage",
+    "PingMessage",
+    "PongMessage",
+    "SubscribeMessage",
+]

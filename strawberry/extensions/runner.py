@@ -1,48 +1,35 @@
-import inspect
-from typing import Any, Dict, List, Optional, Type, Union
+from __future__ import annotations
 
-from graphql import MiddlewareManager
+import inspect
+from typing import TYPE_CHECKING, Any, Optional
 
 from strawberry.extensions.context import (
     ExecutingContextManager,
+    OperationContextManager,
     ParsingContextManager,
-    RequestContextManager,
     ValidationContextManager,
 )
-from strawberry.types import ExecutionContext
 from strawberry.utils.await_maybe import await_maybe
 
-from . import Extension
+if TYPE_CHECKING:
+    from strawberry.types import ExecutionContext
+
+    from . import SchemaExtension
 
 
-class ExtensionsRunner:
-    extensions: List[Extension]
+class SchemaExtensionsRunner:
+    extensions: list[SchemaExtension]
 
     def __init__(
         self,
         execution_context: ExecutionContext,
-        extensions: Optional[List[Union[Type[Extension], Extension]]] = None,
-    ):
+        extensions: Optional[list[SchemaExtension]] = None,
+    ) -> None:
         self.execution_context = execution_context
+        self.extensions = extensions or []
 
-        if not extensions:
-            extensions = []
-
-        init_extensions: List[Extension] = []
-
-        for extension in extensions:
-            # If the extension has already been instantiated then set the
-            # `execution_context` attribute
-            if isinstance(extension, Extension):
-                extension.execution_context = execution_context
-                init_extensions.append(extension)
-            else:
-                init_extensions.append(extension(execution_context=execution_context))
-
-        self.extensions = init_extensions
-
-    def request(self) -> RequestContextManager:
-        return RequestContextManager(self.extensions)
+    def operation(self) -> OperationContextManager:
+        return OperationContextManager(self.extensions)
 
     def validation(self) -> ValidationContextManager:
         return ValidationContextManager(self.extensions)
@@ -53,28 +40,21 @@ class ExtensionsRunner:
     def executing(self) -> ExecutingContextManager:
         return ExecutingContextManager(self.extensions)
 
-    def get_extensions_results_sync(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
-
+    def get_extensions_results_sync(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         for extension in self.extensions:
             if inspect.iscoroutinefunction(extension.get_results):
                 msg = "Cannot use async extension hook during sync execution"
                 raise RuntimeError(msg)
-
             data.update(extension.get_results())  # type: ignore
 
         return data
 
-    async def get_extensions_results(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    async def get_extensions_results(self, ctx: ExecutionContext) -> dict[str, Any]:
+        data: dict[str, Any] = {}
 
         for extension in self.extensions:
-            results = await await_maybe(extension.get_results())
-            data.update(results)
+            data.update(await await_maybe(extension.get_results()))
 
+        data.update(ctx.extensions_results)
         return data
-
-    def as_middleware_manager(self, *additional_middlewares) -> MiddlewareManager:
-        middlewares = tuple(self.extensions) + additional_middlewares
-
-        return MiddlewareManager(*middlewares)

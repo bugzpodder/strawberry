@@ -1,24 +1,31 @@
-from typing import TYPE_CHECKING, Any, Dict, Tuple
+from __future__ import annotations
 
-from graphql import DirectiveNode, GraphQLResolveInfo
+from typing import TYPE_CHECKING, Any, Callable
 
-from strawberry.directive import StrawberryDirective
-from strawberry.extensions import Extension
-from strawberry.field import StrawberryField
-from strawberry.types import Info
-from strawberry.utils.await_maybe import AwaitableOrValue, await_maybe
-
+from strawberry.extensions import SchemaExtension
+from strawberry.types.nodes import convert_arguments
+from strawberry.utils.await_maybe import await_maybe
 
 if TYPE_CHECKING:
+    from graphql import DirectiveNode, GraphQLResolveInfo
+
+    from strawberry.directive import StrawberryDirective
     from strawberry.schema.schema import Schema
+    from strawberry.types.field import StrawberryField
+    from strawberry.utils.await_maybe import AwaitableOrValue
 
 
 SPECIFIED_DIRECTIVES = {"include", "skip"}
 
 
-class DirectivesExtension(Extension):
+class DirectivesExtension(SchemaExtension):
     async def resolve(
-        self, _next, root, info: GraphQLResolveInfo, *args, **kwargs
+        self,
+        _next: Callable,
+        root: Any,
+        info: GraphQLResolveInfo,
+        *args: str,
+        **kwargs: Any,
     ) -> AwaitableOrValue[Any]:
         value = await await_maybe(_next(root, info, *args, **kwargs))
 
@@ -31,9 +38,14 @@ class DirectivesExtension(Extension):
         return value
 
 
-class DirectivesExtensionSync(Extension):
+class DirectivesExtensionSync(SchemaExtension):
     def resolve(
-        self, _next, root, info: GraphQLResolveInfo, *args, **kwargs
+        self,
+        _next: Callable,
+        root: Any,
+        info: GraphQLResolveInfo,
+        *args: str,
+        **kwargs: Any,
     ) -> AwaitableOrValue[Any]:
         value = _next(root, info, *args, **kwargs)
 
@@ -50,7 +62,7 @@ def process_directive(
     directive: DirectiveNode,
     value: Any,
     info: GraphQLResolveInfo,
-) -> Tuple[StrawberryDirective, Dict[str, Any]]:
+) -> tuple[StrawberryDirective, dict[str, Any]]:
     """Get a `StrawberryDirective` from ``directive` and prepare its arguments."""
     directive_name = directive.name.value
     schema: Schema = info.schema._strawberry_schema  # type: ignore
@@ -58,11 +70,7 @@ def process_directive(
     strawberry_directive = schema.get_directive_by_name(directive_name)
     assert strawberry_directive is not None, f"Directive {directive_name} not found"
 
-    # TODO: support converting lists
-    arguments = {
-        argument.name.value: argument.value.value  # type: ignore
-        for argument in directive.arguments
-    }
+    arguments = convert_arguments(info=info, nodes=directive.arguments)
     resolver = strawberry_directive.resolver
 
     info_parameter = resolver.info_parameter
@@ -72,7 +80,12 @@ def process_directive(
             field_name=info.field_name,
             type_name=info.parent_type.name,
         )
-        arguments[info_parameter.name] = Info(_raw_info=info, _field=field)
+        arguments[info_parameter.name] = schema.config.info_class(
+            _raw_info=info, _field=field
+        )
     if value_parameter:
         arguments[value_parameter.name] = value
     return strawberry_directive, arguments
+
+
+__all__ = ["DirectivesExtension", "DirectivesExtensionSync"]

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import EnumMeta
-from typing import List, Optional, Type, Union
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Optional, Union
 
-from typing_extensions import Literal
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from enum import EnumMeta
+    from typing_extensions import Literal
+
+    from strawberry.types.unset import UnsetType
 
 
 @dataclass
@@ -20,7 +24,7 @@ class GraphQLList:
 @dataclass
 class GraphQLUnion:
     name: str
-    types: List[GraphQLObjectType]
+    types: list[GraphQLObjectType]
 
 
 @dataclass
@@ -28,25 +32,49 @@ class GraphQLField:
     name: str
     alias: Optional[str]
     type: GraphQLType
+    default_value: Optional[GraphQLArgumentValue] = None
+
+
+@dataclass
+class GraphQLFragmentSpread:
+    name: str
 
 
 @dataclass
 class GraphQLObjectType:
     name: str
-    fields: List[GraphQLField]
+    fields: list[GraphQLField] = field(default_factory=list)
+    graphql_typename: Optional[str] = None
+
+
+# Subtype of GraphQLObjectType.
+# Because dataclass inheritance is a little odd, the fields are
+# repeated here.
+@dataclass
+class GraphQLFragmentType(GraphQLObjectType):
+    name: str
+    fields: list[GraphQLField] = field(default_factory=list)
+    graphql_typename: Optional[str] = None
+    on: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.on:
+            raise ValueError(
+                "GraphQLFragmentType must be constructed with a valid 'on'"
+            )
 
 
 @dataclass
 class GraphQLEnum:
     name: str
-    values: List[str]
+    values: list[str]
     python_type: EnumMeta
 
 
 @dataclass
 class GraphQLScalar:
     name: str
-    python_type: Optional[Type]
+    python_type: Optional[type]
 
 
 GraphQLType = Union[
@@ -63,18 +91,20 @@ GraphQLType = Union[
 class GraphQLFieldSelection:
     field: str
     alias: Optional[str]
-    selections: List[GraphQLSelection]
-    directives: List[GraphQLDirective]
-    arguments: List[GraphQLArgument]
+    selections: list[GraphQLSelection]
+    directives: list[GraphQLDirective]
+    arguments: list[GraphQLArgument]
 
 
 @dataclass
 class GraphQLInlineFragment:
     type_condition: str
-    selections: List[GraphQLSelection]
+    selections: list[GraphQLSelection]
 
 
-GraphQLSelection = Union[GraphQLFieldSelection, GraphQLInlineFragment]
+GraphQLSelection = Union[
+    GraphQLFieldSelection, GraphQLInlineFragment, GraphQLFragmentSpread
+]
 
 
 @dataclass
@@ -88,8 +118,14 @@ class GraphQLIntValue:
 
 
 @dataclass
+class GraphQLFloatValue:
+    value: float
+
+
+@dataclass
 class GraphQLEnumValue:
     name: str
+    enum_type: Optional[str] = None
 
 
 @dataclass
@@ -98,8 +134,20 @@ class GraphQLBoolValue:
 
 
 @dataclass
+class GraphQLNullValue:
+    """A class that represents a GraphQLNull value."""
+
+    value: None | UnsetType = None
+
+
+@dataclass
 class GraphQLListValue:
-    values: List[GraphQLArgumentValue]
+    values: list[GraphQLArgumentValue]
+
+
+@dataclass
+class GraphQLObjectValue:
+    values: Mapping[str, GraphQLArgumentValue]
 
 
 @dataclass
@@ -109,11 +157,14 @@ class GraphQLVariableReference:
 
 GraphQLArgumentValue = Union[
     GraphQLStringValue,
+    GraphQLNullValue,
     GraphQLIntValue,
     GraphQLVariableReference,
+    GraphQLFloatValue,
     GraphQLListValue,
     GraphQLEnumValue,
     GraphQLBoolValue,
+    GraphQLObjectValue,
 ]
 
 
@@ -126,7 +177,7 @@ class GraphQLArgument:
 @dataclass
 class GraphQLDirective:
     name: str
-    arguments: List[GraphQLArgument]
+    arguments: list[GraphQLArgument]
 
 
 @dataclass
@@ -139,8 +190,39 @@ class GraphQLVariable:
 class GraphQLOperation:
     name: str
     kind: Literal["query", "mutation", "subscription"]
-    selections: List[GraphQLSelection]
-    directives: List[GraphQLDirective]
-    variables: List[GraphQLVariable]
+    selections: list[GraphQLSelection]
+    directives: list[GraphQLDirective]
+    variables: list[GraphQLVariable]
     type: GraphQLObjectType
     variables_type: Optional[GraphQLObjectType]
+
+
+__all__ = [
+    "GraphQLArgument",
+    "GraphQLArgumentValue",
+    "GraphQLBoolValue",
+    "GraphQLDirective",
+    "GraphQLEnum",
+    "GraphQLEnumValue",
+    "GraphQLField",
+    "GraphQLFieldSelection",
+    "GraphQLFloatValue",
+    "GraphQLFragmentSpread",
+    "GraphQLFragmentType",
+    "GraphQLInlineFragment",
+    "GraphQLIntValue",
+    "GraphQLList",
+    "GraphQLListValue",
+    "GraphQLNullValue",
+    "GraphQLObjectType",
+    "GraphQLObjectValue",
+    "GraphQLOperation",
+    "GraphQLOptional",
+    "GraphQLScalar",
+    "GraphQLSelection",
+    "GraphQLStringValue",
+    "GraphQLType",
+    "GraphQLUnion",
+    "GraphQLVariable",
+    "GraphQLVariableReference",
+]

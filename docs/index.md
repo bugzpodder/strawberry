@@ -11,7 +11,7 @@ This tutorial will help you:
 - Run the Strawberry server that lets you execute queries against your schema
 
 This tutorial assumes that you are familiar with the command line and Python,
-and that you have a recent version of Python (3.7+) installed.
+and that you have a recent version of Python (3.9+) installed.
 
 Strawberry is built on top of Python’s
 [dataclasses](https://realpython.com/python-data-classes/) and
@@ -21,20 +21,20 @@ Strawberry is built on top of Python’s
 
 Let’s create a new folder:
 
-```bash
+```shell
 mkdir strawberry-demo
 cd strawberry-demo
 ```
 
 After that we need a new virtualenv:
 
-```bash
+```shell
 python -m venv virtualenv
 ```
 
 Activate the virtualenv and then install strawberry plus the debug server.
 
-```bash
+```shell
 source virtualenv/bin/activate
 pip install 'strawberry-graphql[debug-server]'
 ```
@@ -52,10 +52,12 @@ contents:
 import typing
 import strawberry
 
+
 @strawberry.type
 class Book:
     title: str
     author: str
+
 
 @strawberry.type
 class Query:
@@ -77,8 +79,8 @@ Let’s create a function that returns some books.
 def get_books():
     return [
         Book(
-            title='The Great Gatsby',
-            author='F. Scott Fitzgerald',
+            title="The Great Gatsby",
+            author="F. Scott Fitzgerald",
         ),
     ]
 ```
@@ -123,13 +125,13 @@ schema = strawberry.Schema(query=Query)
 
 Then run the following command
 
-```bash
+```shell
 strawberry server schema
 ```
 
 This will start a debug server, you should see the following output:
 
-```bash
+```text
 Running strawberry on http://0.0.0.0:8000/graphql 🍓
 ```
 
@@ -141,7 +143,7 @@ We can now execute GraphQL queries. Strawberry comes with a tool called
 
 You should see something like this:
 
-<img src="./images/index-server.png" alt="A view of the GraphiQL interface" width="2048" height="1536" />
+![A view of the GraphiQL interface](./images/index-server.png)
 
 The GraphiQL UI includes:
 
@@ -165,7 +167,7 @@ Paste the following string into the left area and then click the play button:
 
 You should see the hardcoded data appear on the right side:
 
-<img src="./images/index-query-example.png" alt="A view of the GraphiQL interface after running a GraphQL query" width="2048" height="1536" />
+![A view of the GraphiQL interface after running a GraphQL query](./images/index-query-example.png)
 
 GraphQL allows clients to query only the fields they need, go ahead and remove
 `author` from the query and run it again. The response should now only show the
@@ -179,6 +181,6 @@ Well done! You just created your first GraphQL API using Strawberry 🙌!
 
 Check out the following resources to learn more about GraphQL and Strawberry.
 
-- [Schema Basics](/docs/general/schema-basics.md)
-- [Resolvers](/docs/types/resolvers.md)
-- [Deployment](/docs/operations/deployment.md)
+- [Schema Basics](./general/schema-basics.md)
+- [Resolvers](./types/resolvers.md)
+- [Deployment](./operations/deployment.md)

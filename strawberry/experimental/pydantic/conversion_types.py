@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, TypeVar
-
-from pydantic import BaseModel
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
 from typing_extensions import Protocol
 
-from strawberry.types.types import TypeDefinition
+from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from strawberry.types.base import StrawberryObjectDefinition
 
 
 PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
@@ -13,24 +14,21 @@ PydanticModel = TypeVar("PydanticModel", bound=BaseModel)
 
 class StrawberryTypeFromPydantic(Protocol[PydanticModel]):
     """This class does not exist in runtime.
-    It only makes the methods below visible for IDEs"""
 
-    def __init__(self, **kwargs):
-        ...
+    It only makes the methods below visible for IDEs.
+    """
+
+    def __init__(self, **kwargs: Any) -> None: ...
 
     @staticmethod
     def from_pydantic(
-        instance: PydanticModel, extra: Optional[Dict[str, Any]] = None
-    ) -> StrawberryTypeFromPydantic[PydanticModel]:
-        ...
+        instance: PydanticModel, extra: Optional[dict[str, Any]] = None
+    ) -> StrawberryTypeFromPydantic[PydanticModel]: ...
 
-    def to_pydantic(self, **kwargs) -> PydanticModel:
-        ...
+    def to_pydantic(self, **kwargs: Any) -> PydanticModel: ...
 
     @property
-    def _type_definition(self) -> TypeDefinition:
-        ...
+    def __strawberry_definition__(self) -> StrawberryObjectDefinition: ...
 
     @property
-    def _pydantic_type(self) -> PydanticModel:
-        ...
+    def _pydantic_type(self) -> type[PydanticModel]: ...

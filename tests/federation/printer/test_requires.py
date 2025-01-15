@@ -1,7 +1,6 @@
 # type: ignore
 
 import textwrap
-from typing import List
 
 import strawberry
 
@@ -21,7 +20,7 @@ def test_fields_requires_are_printed_correctly():
         field3: str = strawberry.federation.field(external=True)
 
         @strawberry.federation.field(requires=["field1", "field2", "field3"])
-        def reviews(self) -> List["Review"]:
+        def reviews(self) -> list["Review"]:
             return []
 
     @strawberry.federation.type
@@ -33,13 +32,13 @@ def test_fields_requires_are_printed_correctly():
     @strawberry.federation.type
     class Query:
         @strawberry.field
-        def top_products(self, first: int) -> List[Product]:
+        def top_products(self, first: int) -> list[Product]:  # pragma: no cover
             return []
 
     schema = strawberry.federation.Schema(query=Query, enable_federation_2=True)
 
     expected = """
-        schema @link(url: "https://specs.apollo.dev/federation/v2.0", import: ["@external", "@key", "@requires"]) {
+        schema @link(url: "https://specs.apollo.dev/federation/v2.7", import: ["@external", "@key", "@requires"]) {
           query: Query
         }
 

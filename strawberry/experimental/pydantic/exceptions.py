@@ -1,11 +1,14 @@
-from typing import Any, List, Type
+from __future__ import annotations
 
-from pydantic import BaseModel
-from pydantic.typing import NoArgAnyCallable
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+    from pydantic.typing import NoArgAnyCallable
 
 
 class MissingFieldsListError(Exception):
-    def __init__(self, type: Type[BaseModel]):
+    def __init__(self, type: type[BaseModel]) -> None:
         message = (
             f"List of fields to copy from {type} is empty. Add fields with the "
             f"`auto` type annotation"
@@ -19,7 +22,7 @@ class UnsupportedTypeError(Exception):
 
 
 class UnregisteredTypeException(Exception):
-    def __init__(self, type: Type[BaseModel]):
+    def __init__(self, type: type[BaseModel]) -> None:
         message = (
             f"Cannot find a Strawberry Type for {type} did you forget to register it?"
         )
@@ -28,7 +31,7 @@ class UnregisteredTypeException(Exception):
 
 
 class BothDefaultAndDefaultFactoryDefinedError(Exception):
-    def __init__(self, default: Any, default_factory: NoArgAnyCallable):
+    def __init__(self, default: Any, default_factory: NoArgAnyCallable) -> None:
         message = (
             f"Not allowed to specify both default and default_factory. "
             f"default:{default} default_factory:{default_factory}"
@@ -38,7 +41,12 @@ class BothDefaultAndDefaultFactoryDefinedError(Exception):
 
 
 class AutoFieldsNotInBaseModelError(Exception):
-    def __init__(self, fields: List[str], cls_name: str, model: Type[BaseModel]):
+    def __init__(
+        self,
+        fields: list[str],
+        cls_name: str,
+        model: type[BaseModel],
+    ) -> None:
         message = (
             f"{cls_name} defines {fields} with strawberry.auto. "
             f"Field(s) not present in {model.__name__} BaseModel."

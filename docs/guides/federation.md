@@ -116,11 +116,13 @@ class Review:
     id: int
     body: str
 
+
 def get_reviews(root: "Book") -> List[Review]:
     return [
-      Review(id=id_, body=f"A review for {root.id}")
-      for id_ in range(root.reviews_count)
+        Review(id=id_, body=f"A review for {root.id}")
+        for id_ in range(root.reviews_count)
     ]
+
 
 @strawberry.federation.type(keys=["id"])
 class Book:
@@ -134,11 +136,15 @@ class Book:
         # or even from an API
         return Book(id=id, reviews_count=3)
 
+
 @strawberry.type
 class Query:
     _hi: str = strawberry.field(resolver=lambda: "Hello World!")
 
-schema = strawberry.federation.Schema(query=Query, types=[Book, Review], enable_federation_2=True)
+
+schema = strawberry.federation.Schema(
+    query=Query, types=[Book, Review], enable_federation_2=True
+)
 ```
 
 Now things are looking more interesting; the `Review` type is a GraphQL type
@@ -163,7 +169,7 @@ entity across multiple services. For example, when making this query:
 ```graphql
 {
   # query defined in the books service
-  books {
+  allBooks {
     title
     # field defined in the reviews service
     reviews {
@@ -189,6 +195,22 @@ Finally we also need to let Strawberry know about our Book and Review types.
 Since they are not reachable from the `Query` field itself, Strawberry won't be
 able to find them.
 
+<Note>
+
+If you don't need any custom logic for your resolve_reference, you can omit it
+and Strawberry will automatically instanciate the type for you. For example, if
+we had a `Book` type with only an `id` field, Strawberry would be able to
+instanciate it for us based on the data returned by the gateway.
+
+```python
+@strawberry.federation.type(keys=["id"])
+class Book:
+    id: strawberry.ID
+    reviews: List[Review] = strawberry.field(resolver=get_reviews)
+```
+
+</Note>
+
 ## Let's run our services
 
 Before starting Apollo Router to compose our schemas we need to run the
@@ -196,12 +218,12 @@ services.
 
 In two terminal windows, run the following commands:
 
-```bash
+```shell
 cd books
 strawberry server --port 3500 app
 ```
 
-```bash
+```shell
 cd reviews
 strawberry server --port 3000 app
 ```
@@ -244,14 +266,14 @@ subgraphs:
 This file will be used by rover to compose the schema, which can be done with
 the following command:
 
-```bash
+```shell
 # Creates prod-schema.graphql or overwrites if it already exists
 rover supergraph compose --config ./supergraph.yaml > supergraph-schema.graphql
 ```
 
 Now that we have the composed schema, we can start the router.
 
-```bash
+```shell
 ./router --supergraph supergraph-schema.graphql
 ```
 
@@ -300,6 +322,75 @@ if everything went well we should get the following result:
 We have provided a full example that you can run and tweak to play with
 Strawberry and Federation. The repo is available here:
 [https://github.com/strawberry-graphql/federation-demo](https://github.com/strawberry-graphql/federation-demo)
+
+## Federated schema directives
+
+Strawberry provides implementations for
+[Apollo federation-specific GraphQL directives](https://www.apollographql.com/docs/federation/federated-types/federated-directives/)
+up to federation spec v2.7.
+
+Some of these directives may not be necessary to directly include in your code,
+and are accessed through other means.
+
+- `@interfaceObject` (for more details, see
+  [Extending interfaces](https://strawberry.rocks/docs/federation/entity-interfaces))
+- `@key` (for more details, see
+  [Entities (Apollo Federation)](https://strawberry.rocks/docs/federation/entities))
+- `@link` (is automatically be added to the schema when any other federated
+  schema directive is used)
+
+Other directives you may need to specifically include when relevant.
+
+- `@composeDirective`
+- `@external`
+- `@inaccessible`
+- `@override`
+- `@provides`
+- `@requires`
+- `@shareable`
+- `@tag`
+- `@authenticated`
+- `@requiresScopes`
+- `@policy`
+
+For example, adding the following directives:
+
+```python
+import strawberry
+from strawberry.federation.schema_directives import Inaccessible, Shareable, Tag
+
+
+@strawberry.type(directives=[Key(fields="id"), Tag(name="experimental")])
+class Book:
+    id: strawberry.ID
+
+
+@strawberry.type(directives=[Shareable()])
+class CommonType:
+    foo: str
+    woops: bool = strawberry.field(directives=[Inaccessible()])
+```
+
+Will result in the following GraphQL schema:
+
+```graphql
+schema
+  @link(
+    url: "https://specs.apollo.dev/federation/v2.7"
+    import: ["@key", "@inaccessible", "@shareable", "@tag"]
+  ) {
+  query: Query
+  mutation: Mutation
+}
+
+type Book @tag(name: "experimental") @key(fields: "id", resolveable: true) {
+  id: ID!
+}
+
+type CommonType @shareable {
+  foo: String!
+}
+```
 
 ## Additional resources
 

@@ -1,5 +1,5 @@
 ---
-title: MaskErrors
+title: Mask Errors
 summary: Hide error messages from the client.
 tags: security
 ---
@@ -19,14 +19,16 @@ schema = strawberry.Schema(
     Query,
     extensions=[
         MaskErrors(),
-    ]
+    ],
 )
 ```
 
 ## API reference:
 
 ```python
-class MaskErrors(should_mask_error=default_should_mask_error, error_message="Unexpected error.")`
+class MaskErrors(
+    should_mask_error=default_should_mask_error, error_message="Unexpected error."
+): ...
 ```
 
 #### `should_mask_error: Callable[[GraphQLError], bool] = default_should_mask_error`
@@ -55,8 +57,10 @@ import strawberry
 from strawberry.extensions import MaskErrors
 from graphql.error import GraphQLError
 
+
 class VisibleError(Exception):
     pass
+
 
 def should_mask_error(error: GraphQLError) -> bool:
     original_error = error.original_error
@@ -65,11 +69,12 @@ def should_mask_error(error: GraphQLError) -> bool:
 
     return True
 
+
 schema = strawberry.Schema(
     Query,
     extensions=[
         MaskErrors(should_mask_error=should_mask_error),
-    ]
+    ],
 )
 ```
 
@@ -86,7 +91,7 @@ schema = strawberry.Schema(
     Query,
     extensions=[
         MaskErrors(error_message="Oh no! An error occured. Very sorry about that."),
-    ]
+    ],
 )
 ```
 

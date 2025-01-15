@@ -33,6 +33,7 @@ import strawberry
 
 from .models import User
 
+
 @strawberry.experimental.pydantic.type(model=User)
 class UserType:
     id: strawberry.auto
@@ -41,20 +42,21 @@ class UserType:
 ```
 
 The `strawberry.experimental.pydantic.type` decorator accepts a Pydantic model
-and wraps a class that contains dataclass style fields with `strawberry.auto` as the type
-annotation. The fields marked with `strawberry.auto` will inherit their types from the
-Pydantic model.
+and wraps a class that contains dataclass style fields with `strawberry.auto` as
+the type annotation. The fields marked with `strawberry.auto` will inherit their
+types from the Pydantic model.
 
 If you want to include all of the fields from your Pydantic model, you can
 instead pass `all_fields=True` to the decorator.
 
--> **Note** Care should be taken to avoid accidentally exposing fields that
--> weren't meant to be exposed on an API using this feature.
+-> **Note** Care should be taken to avoid accidentally exposing fields that ->
+weren't meant to be exposed on an API using this feature.
 
 ```python
 import strawberry
 
 from .models import User
+
 
 @strawberry.experimental.pydantic.type(model=User, all_fields=True)
 class UserType:
@@ -70,6 +72,7 @@ Input types are similar to types; we can create one by using the
 import strawberry
 
 from .models import User
+
 
 @strawberry.experimental.pydantic.input(model=User)
 class UserInput:
@@ -88,16 +91,20 @@ import strawberry
 from pydantic import BaseModel
 from typing import List
 
+
 # pydantic types
 class User(BaseModel):
     id: int
     name: str
 
+
 class NormalUser(User):
     friends: List[int] = []
 
+
 class AdminUser(User):
     role: int
+
 
 # strawberry types
 @strawberry.experimental.pydantic.interface(model=User)
@@ -105,9 +112,11 @@ class UserType:
     id: strawberry.auto
     name: strawberry.auto
 
+
 @strawberry.experimental.pydantic.type(model=NormalUser)
 class NormalUserType(UserType):  # note the base class
     friends: strawberry.auto
+
 
 @strawberry.experimental.pydantic.type(model=AdminUser)
 class AdminUserType(UserType):
@@ -120,30 +129,36 @@ In addition to object types and input types, Strawberry allows you to create
 "error types". You can use these error types to have a typed representation of
 Pydantic errors in GraphQL. Let's see an example:
 
-```python+schema
-import pydantic
+<CodeGrid>
+
+```python
+from pydantic import BaseModel, constr
 import strawberry
+
 
 class User(BaseModel):
     id: int
-    name: pydantic.constr(min_length=2)
+    name: constr(min_length=2)
     signup_ts: Optional[datetime] = None
     friends: List[int] = []
+
 
 @strawberry.experimental.pydantic.error_type(model=User)
 class UserError:
     id: strawberry.auto
     name: strawberry.auto
     friends: strawberry.auto
+```
 
----
-
+```graphql
 type UserError {
   id: [String!]
   name: [String!]
   friends: [[String!]]
 }
 ```
+
+</CodeGrid>
 
 where each field will hold a list of error messages
 
@@ -152,30 +167,36 @@ where each field will hold a list of error messages
 You can use the usual Strawberry syntax to add additional new fields to the
 GraphQL type that aren't defined in the pydantic model
 
-```python+schema
+<CodeGrid>
+
+```python
 import strawberry
-import pydantic
+from pydantic import BaseModel
 
 from .models import User
+
 
 class User(BaseModel):
     id: int
     name: str
+
 
 @strawberry.experimental.pydantic.type(model=User)
 class User:
     id: strawberry.auto
     name: strawberry.auto
     age: int
+```
 
----
-
+```graphql
 type User {
-    id: Int!
-    name: String!
-    age: Int!
+  id: Int!
+  name: String!
+  age: Int!
 }
 ```
+
+</CodeGrid>
 
 ### Converting types
 
@@ -202,7 +223,8 @@ class UserType:
     id: strawberry.auto
     name: strawberry.auto
 
-instance = User(id='123', name='Jake')
+
+instance = User(id="123", name="Jake")
 
 data = UserType.from_pydantic(instance)
 ```
@@ -228,9 +250,10 @@ class UserType:
     name: strawberry.auto
     age: int
 
-instance = User(id='123', name='Jake')
 
-data = UserType.from_pydantic(instance, extra={'age': 10})
+instance = User(id="123", name="Jake")
+
+data = UserType.from_pydantic(instance, extra={"age": 10})
 ```
 
 The data dictionary structure follows the structure of your data -- if you have
@@ -259,7 +282,8 @@ class UserInput:
     id: strawberry.auto
     name: strawberry.auto
 
-input_data = UserInput(id='abc', name='Jake')
+
+input_data = UserInput(id="abc", name="Jake")
 
 # this will run pydantic's validation
 instance = input_data.to_pydantic()
@@ -267,20 +291,25 @@ instance = input_data.to_pydantic()
 
 ### Constrained types
 
-Strawberry supports [pydantic constrained types](https://pydantic-docs.helpmanual.io/usage/types/#constrained-types).
-Note that constraint is not enforced in the graphql type. Thus, we recommend always working on the pydantic
-type such that the validation is enforced.
+Strawberry supports
+[pydantic constrained types](https://pydantic-docs.helpmanual.io/usage/types/#constrained-types).
+Note that constraint is not enforced in the graphql type. Thus, we recommend
+always working on the pydantic type such that the validation is enforced.
 
-```python+schema
+<CodeGrid>
+
+```python
 from pydantic import BaseModel, conlist
 import strawberry
+
 
 class Example(BaseModel):
     friends: conlist(str, min_items=1)
 
+
 @strawberry.experimental.pydantic.input(model=Example, all_fields=True)
-class ExampleGQL:
-    ...
+class ExampleGQL: ...
+
 
 @strawberry.type
 class Query:
@@ -292,9 +321,11 @@ class Query:
         # an error if friends is empty
         print(example.to_pydantic().friends)
 
-schema = strawberry.Schema(query=Query)
 
----
+schema = strawberry.Schema(query=Query)
+```
+
+```graphql
 input ExampleGQL {
   friends: [String!]!
 }
@@ -304,11 +335,14 @@ type Query {
 }
 ```
 
+</CodeGrid>
+
 ### Classes with `__get_validators__`
 
-Pydantic BaseModels may define a custom type with [`__get_validators__`](https://pydantic-docs.helpmanual.io/usage/types/#classes-with-__get_validators__)
-logic. You will need to add a scalar type and add the mapping to the `scalar_overrides`
-argument in the Schema class.
+Pydantic BaseModels may define a custom type with
+[`__get_validators__`](https://pydantic-docs.helpmanual.io/usage/types/#classes-with-__get_validators__)
+logic. You will need to add a scalar type and add the mapping to the
+`scalar_overrides` argument in the Schema class.
 
 ```python
 import strawberry
@@ -330,8 +364,7 @@ class Example(BaseModel):
 
 
 @strawberry.experimental.pydantic.type(model=Example, all_fields=True)
-class ExampleGQL:
-    ...
+class ExampleGQL: ...
 
 
 MyScalarType = strawberry.scalar(
@@ -397,7 +430,7 @@ class UserType:
 class Query:
     @strawberry.field
     def test() -> UserType:
-        return UserType.from_pydantic(User(id=123, hash=b'abcd'))
+        return UserType.from_pydantic(User(id=123, hash=b"abcd"))
 
 
 schema = strawberry.Schema(query=Query)
@@ -430,6 +463,7 @@ class ContentType(enum.Enum):
     NAME = "name"
     DESCRIPTION = "description"
 
+
 class User(BaseModel):
     id: str
     content: Dict[ContentType, str]
@@ -460,11 +494,12 @@ class UserType:
                 content[enum_member.value] = data.pop(key)
         return User(content=content, **data)
 
+
 user = User(id="abc", content={ContentType.NAME: "Bob"})
 print(UserType.from_pydantic(user))
 # UserType(id='abc', content_name='Bob', content_description=None)
 
-user_type = UserType(id='abc', content_name='Bob', content_description=None)
+user_type = UserType(id="abc", content_name="Bob", content_description=None)
 print(user_type.to_pydantic())
 # id='abc' content={<ContentType.NAME: 'name'>: 'Bob'}
 ```

@@ -5,18 +5,19 @@ from operator import methodcaller
 from typing import Callable
 
 import dateutil.parser
-
 from graphql import GraphQLError
 
-from strawberry.custom_scalar import scalar
+from strawberry.types.scalar import scalar
 
 
 def wrap_parser(parser: Callable, type_: str) -> Callable:
-    def inner(value: str):
+    def inner(value: str) -> object:
         try:
             return parser(value)
         except ValueError as e:
-            raise GraphQLError(f'Value cannot represent a {type_}: "{value}". {e}')
+            raise GraphQLError(  # noqa: B904
+                f'Value cannot represent a {type_}: "{value}". {e}'
+            )
 
     return inner
 
@@ -25,7 +26,7 @@ def parse_decimal(value: object) -> decimal.Decimal:
     try:
         return decimal.Decimal(str(value))
     except decimal.DecimalException:
-        raise GraphQLError(f'Value cannot represent a Decimal: "{value}".')
+        raise GraphQLError(f'Value cannot represent a Decimal: "{value}".')  # noqa: B904
 
 
 isoformat = methodcaller("isoformat")
@@ -69,7 +70,7 @@ UUID = scalar(
 )
 
 
-def _verify_void(x) -> None:
+def _verify_void(x: None) -> None:
     if x is not None:
         raise ValueError(f"Expected 'None', got '{x}'")
 
@@ -81,3 +82,5 @@ Void = scalar(
     parse_value=_verify_void,
     description="Represents NULL values",
 )
+
+__all__ = ["UUID", "Date", "DateTime", "Decimal", "Time", "Void"]

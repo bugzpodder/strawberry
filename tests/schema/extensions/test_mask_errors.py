@@ -1,7 +1,6 @@
 from unittest.mock import Mock
 
 from graphql.error import GraphQLError
-from graphql.error.graphql_error import format_error as format_graphql_error
 
 import strawberry
 from strawberry.extensions import MaskErrors
@@ -20,7 +19,30 @@ def test_mask_all_errors():
 
     result = schema.execute_sync(query)
     assert result.errors is not None
-    formatted_errors = [format_graphql_error(err) for err in result.errors]
+    formatted_errors = [err.formatted for err in result.errors]
+    assert formatted_errors == [
+        {
+            "locations": [{"column": 9, "line": 1}],
+            "message": "Unexpected error.",
+            "path": ["hiddenError"],
+        }
+    ]
+
+
+async def test_mask_all_errors_async():
+    @strawberry.type
+    class Query:
+        @strawberry.field
+        def hidden_error(self) -> str:
+            raise KeyError("This error is not visible")
+
+    schema = strawberry.Schema(query=Query, extensions=[MaskErrors()])
+
+    query = "query { hiddenError }"
+
+    result = await schema.execute(query)
+    assert result.errors is not None
+    formatted_errors = [err.formatted for err in result.errors]
     assert formatted_errors == [
         {
             "locations": [{"column": 9, "line": 1}],
@@ -46,9 +68,7 @@ def test_mask_some_errors():
 
     def should_mask_error(error: GraphQLError) -> bool:
         original_error = error.original_error
-        if original_error and isinstance(original_error, VisibleError):
-            return False
-        return True
+        return not (original_error and isinstance(original_error, VisibleError))
 
     schema = strawberry.Schema(
         query=Query, extensions=[MaskErrors(should_mask_error=should_mask_error)]
@@ -58,7 +78,7 @@ def test_mask_some_errors():
 
     result = schema.execute_sync(query)
     assert result.errors is not None
-    formatted_errors = [format_graphql_error(err) for err in result.errors]
+    formatted_errors = [err.formatted for err in result.errors]
     assert formatted_errors == [
         {
             "locations": [{"column": 9, "line": 1}],
@@ -71,7 +91,7 @@ def test_mask_some_errors():
 
     result = schema.execute_sync(query)
     assert result.errors is not None
-    formatted_errors = [format_graphql_error(err) for err in result.errors]
+    formatted_errors = [err.formatted for err in result.errors]
     assert formatted_errors == [
         {
             "locations": [{"column": 9, "line": 1}],
@@ -101,7 +121,7 @@ def test_process_errors_original_error():
 
     result = schema.execute_sync(query)
     assert result.errors is not None
-    formatted_errors = [format_graphql_error(err) for err in result.errors]
+    formatted_errors = [err.formatted for err in result.errors]
     assert formatted_errors == [
         {
             "locations": [{"column": 9, "line": 1}],
@@ -129,7 +149,7 @@ def test_graphql_error_masking():
 
     result = schema.execute_sync(query)
     assert result.errors is not None
-    formatted_errors = [format_graphql_error(err) for err in result.errors]
+    formatted_errors = [err.formatted for err in result.errors]
     assert formatted_errors == [
         {
             "locations": [{"column": 9, "line": 1}],

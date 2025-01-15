@@ -77,17 +77,24 @@ don’t have fields in common, use a [Union](/docs/types/union) instead.
 
 Interfaces are defined using the `@strawberry.interface` decorator:
 
-```python+schema
+<CodeGrid>
+
+```python
 import strawberry
+
 
 @strawberry.interface
 class Customer:
     name: str
----
+```
+
+```graphql
 interface Customer {
   name: String!
 }
 ```
+
+</CodeGrid>
 
 <Note>
 
@@ -103,20 +110,24 @@ from the interface:
 ```python
 import strawberry
 
+
 @strawberry.type
 class Individual(Customer):
     # additional fields
+    ...
+
 
 @strawberry.type
 class Company(Customer):
     # additional fields
+    ...
 ```
 
 <Tip>
 
-If you add an object type which implements an interface, but that object
-type doesn’t appear in your schema as a field return type or a union member,
-then you will need to add that object to the Schema definition directly.
+If you add an object type which implements an interface, but that object type
+doesn’t appear in your schema as a field return type or a union member, then you
+will need to add that object to the Schema definition directly.
 
 ```python
 schema = strawberry.Schema(query=Query, types=[Individual, Company])
@@ -126,24 +137,31 @@ schema = strawberry.Schema(query=Query, types=[Individual, Company])
 
 Interfaces can also implement other interfaces:
 
-```python+schema
+<CodeGrid>
+
+```python
 import strawberry
+
 
 @strawberry.interface
 class Error:
     message: str
+
 
 @strawberry.interface
 class FieldError(Error):
     message: str
     field: str
 
+
 @strawberry.type
 class PasswordTooShort(FieldError):
     message: str
     field: str
-    fix: str
----
+    min_length: int
+```
+
+```graphql
 interface Error {
   message: String!
 }
@@ -160,12 +178,15 @@ type PasswordTooShort implements FieldError & Error {
 }
 ```
 
+</CodeGrid>
+
 ## Implementing fields
 
 Interfaces can provide field implementations as well. For example:
 
 ```python
 import strawberry
+
 
 @strawberry.interface
 class Customer:
@@ -180,6 +201,7 @@ field:
 
 ```python
 import strawberry
+
 
 @strawberry.type
 class Company(Customer):
@@ -197,6 +219,7 @@ always return an instance of an object type from your resolver:
 
 ```python
 import strawberry
+
 
 @strawberry.type
 class Query:

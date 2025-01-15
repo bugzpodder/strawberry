@@ -51,7 +51,7 @@ In addition to Datadog and Apollo Tracing we also support
 
 You also need to install the extras for opentelemetry by doing:
 
-```
+```shell
 pip install 'strawberry-graphql[opentelemetry]'
 ```
 
@@ -110,7 +110,8 @@ services:
     healthcheck:
       interval: 10s
       retries: 12
-      test: curl -s http://localhost:9200/_cluster/health | grep -vq
+      test:
+        curl -s http://localhost:9200/_cluster/health | grep -vq
         '"status":"red"'
 
   kibana:
@@ -222,7 +223,7 @@ service:
 
 Spin this docker-compose up with (this will take a while, give it a minute):
 
-```
+```shell
 docker-compose up --force-recreate --build
 ```
 
@@ -254,6 +255,7 @@ span_processor = BatchSpanProcessor(otlp_exporter)
 trace.get_tracer_provider().add_span_processor(span_processor)
 
 ...
+
 
 def main():
     DjangoInstrumentor().instrument()

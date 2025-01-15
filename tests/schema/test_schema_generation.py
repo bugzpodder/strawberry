@@ -1,9 +1,8 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import pytest
-
+from graphql import ExecutionContext as GraphQLExecutionContext
 from graphql import (
-    ExecutionContext as GraphQLExecutionContext,
     ExecutionResult,
     GraphQLError,
     GraphQLField,
@@ -11,8 +10,8 @@ from graphql import (
     GraphQLObjectType,
     GraphQLSchema,
     GraphQLString,
-    print_schema as graphql_core_print_schema,
 )
+from graphql import print_schema as graphql_core_print_schema
 
 import strawberry
 
@@ -57,8 +56,7 @@ def test_schema_introspect_returns_the_introspection_query_result():
 
 def test_schema_fails_on_an_invalid_schema():
     @strawberry.type
-    class Query:
-        ...  # Type must have at least one field
+    class Query: ...  # Type must have at least one field
 
     with pytest.raises(ValueError, match="Invalid Schema. Errors.*"):
         strawberry.Schema(query=Query)
@@ -68,8 +66,8 @@ def test_custom_execution_context():
     class CustomExecutionContext(GraphQLExecutionContext):
         @staticmethod
         def build_response(
-            data: Optional[Dict[str, Any]],
-            errors: List[GraphQLError],
+            data: Optional[dict[str, Any]],
+            errors: list[GraphQLError],
         ) -> ExecutionResult:
             result = super(
                 CustomExecutionContext, CustomExecutionContext

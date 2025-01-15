@@ -1,20 +1,31 @@
+from __future__ import annotations
+
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 from strawberry.codegen import CodegenFile, QueryCodegenPlugin
 from strawberry.codegen.types import (
     GraphQLEnum,
-    GraphQLField,
+    GraphQLEnumValue,
     GraphQLList,
+    GraphQLNullValue,
     GraphQLObjectType,
-    GraphQLOperation,
     GraphQLOptional,
     GraphQLScalar,
-    GraphQLType,
     GraphQLUnion,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from strawberry.codegen.types import (
+        GraphQLArgumentValue,
+        GraphQLField,
+        GraphQLOperation,
+        GraphQLType,
+    )
 
 
 @dataclass
@@ -24,7 +35,7 @@ class PythonType:
 
 
 class PythonPlugin(QueryCodegenPlugin):
-    SCALARS_TO_PYTHON_TYPES = {
+    SCALARS_TO_PYTHON_TYPES: ClassVar[dict[str, PythonType]] = {
         "ID": PythonType("str"),
         "Int": PythonType("int"),
         "String": PythonType("str"),
@@ -37,22 +48,24 @@ class PythonPlugin(QueryCodegenPlugin):
         "Decimal": PythonType("Decimal", "decimal"),
     }
 
-    def __init__(self) -> None:
-        self.imports: Dict[str, Set[str]] = defaultdict(set)
+    def __init__(self, query: Path) -> None:
+        self.imports: dict[str, set[str]] = defaultdict(set)
+        self.outfile_name: str = query.with_suffix(".py").name
+        self.query = query
 
     def generate_code(
-        self, types: List[GraphQLType], operation: GraphQLOperation
-    ) -> List[CodegenFile]:
+        self, types: list[GraphQLType], operation: GraphQLOperation
+    ) -> list[CodegenFile]:
         printed_types = list(filter(None, (self._print_type(type) for type in types)))
         imports = self._print_imports()
 
         code = imports + "\n\n" + "\n\n".join(printed_types)
 
-        return [CodegenFile("types.py", code.strip())]
+        return [CodegenFile(self.outfile_name, code.strip())]
 
     def _print_imports(self) -> str:
         imports = [
-            f'from {import_} import {", ".join(sorted(types))}'
+            f"from {import_} import {', '.join(sorted(types))}"
             for import_, types in self.imports.items()
         ]
 
@@ -67,7 +80,7 @@ class PythonPlugin(QueryCodegenPlugin):
         if isinstance(type_, GraphQLList):
             self.imports["typing"].add("List")
 
-            return f"List[{self._get_type_name(type_.of_type)}]"
+            return f"list[{self._get_type_name(type_.of_type)}]"
 
         if isinstance(type_, GraphQLUnion):
             # TODO: wrong place for this
@@ -102,20 +115,63 @@ class PythonPlugin(QueryCodegenPlugin):
         if field.alias:
             name = f"# alias for {field.name}\n{field.alias}"
 
-        return f"{name}: {self._get_type_name(field.type)}"
+        default_value = ""
+        if field.default_value is not None:
+            default_value = f" = {self._print_argument_value(field.default_value)}"
+        return f"{name}: {self._get_type_name(field.type)}{default_value}"
+
+    def _print_argument_value(self, argval: GraphQLArgumentValue) -> str:
+        if hasattr(argval, "values"):
+            if isinstance(argval.values, list):
+                return (
+                    "["
+                    + ", ".join(self._print_argument_value(v) for v in argval.values)
+                    + "]"
+                )
+            if isinstance(argval.values, dict):
+                return (
+                    "{"
+                    + ", ".join(
+                        f"{k!r}: {self._print_argument_value(v)}"
+                        for k, v in argval.values.items()
+                    )
+                    + "}"
+                )
+            raise TypeError(f"Unrecognized values type: {argval}")
+        if isinstance(argval, GraphQLEnumValue):
+            # This is an enum.  It needs the namespace alongside the name.
+            if argval.enum_type is None:
+                raise ValueError(
+                    "GraphQLEnumValue must have a type for python code gen. {argval}"
+                )
+            return f"{argval.enum_type}.{argval.name}"
+        if isinstance(argval, GraphQLNullValue):
+            return "None"
+        if not hasattr(argval, "value"):
+            raise TypeError(f"Unrecognized values type: {argval}")
+        return repr(argval.value)
 
     def _print_enum_value(self, value: str) -> str:
         return f'{value} = "{value}"'
 
     def _print_object_type(self, type_: GraphQLObjectType) -> str:
-        fields = "\n".join(self._print_field(field) for field in type_.fields)
-
-        return "\n".join(
-            [
-                f"class {type_.name}:",
-                textwrap.indent(fields, " " * 4),
-            ]
+        fields = "\n".join(
+            self._print_field(field)
+            for field in type_.fields
+            if field.name != "__typename"
         )
+
+        indent = 4 * " "
+        lines = [
+            f"class {type_.name}:",
+        ]
+        if type_.graphql_typename:
+            lines.append(
+                textwrap.indent(f"# typename: {type_.graphql_typename}", indent)
+            )
+        lines.append(textwrap.indent(fields, indent))
+
+        return "\n".join(lines)
 
     def _print_enum_type(self, type_: GraphQLEnum) -> str:
         values = "\n".join(self._print_enum_value(value) for value in type_.values)
@@ -131,9 +187,9 @@ class PythonPlugin(QueryCodegenPlugin):
         if type_.name in self.SCALARS_TO_PYTHON_TYPES:
             return ""
 
-        assert (
-            type_.python_type is not None
-        ), f"Scalar type must have a python type: {type_.name}"
+        assert type_.python_type is not None, (
+            f"Scalar type must have a python type: {type_.name}"
+        )
 
         return f'{type_.name} = NewType("{type_.name}", {type_.python_type.__name__})'
 

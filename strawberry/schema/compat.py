@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Union
+from typing import TYPE_CHECKING, Union
 
-from strawberry.custom_scalar import ScalarDefinition, ScalarWrapper
 from strawberry.scalars import is_scalar as is_strawberry_scalar
-from strawberry.type import StrawberryType
-from strawberry.types.types import TypeDefinition
-
+from strawberry.types.base import StrawberryType, has_object_definition
 
 # TypeGuard is only available in typing_extensions => 3.10, we don't want
 # to force updates to the typing_extensions package so we only use it when
@@ -15,38 +12,29 @@ from strawberry.types.types import TypeDefinition
 if TYPE_CHECKING:
     from typing_extensions import TypeGuard
 
+    from strawberry.types.scalar import ScalarDefinition, ScalarWrapper
+
 
 def is_input_type(type_: Union[StrawberryType, type]) -> TypeGuard[type]:
-    if not is_object_type(type_):
+    if not has_object_definition(type_):
         return False
-
-    type_definition: TypeDefinition = type_._type_definition  # type: ignore
-    return type_definition.is_input
+    return type_.__strawberry_definition__.is_input
 
 
 def is_interface_type(type_: Union[StrawberryType, type]) -> TypeGuard[type]:
-    if not is_object_type(type_):
+    if not has_object_definition(type_):
         return False
-
-    type_definition: TypeDefinition = type_._type_definition  # type: ignore
-    return type_definition.is_interface
+    return type_.__strawberry_definition__.is_interface
 
 
 def is_scalar(
     type_: Union[StrawberryType, type],
-    scalar_registry: Dict[object, Union[ScalarWrapper, ScalarDefinition]],
+    scalar_registry: dict[object, Union[ScalarWrapper, ScalarDefinition]],
 ) -> TypeGuard[type]:
-    # isinstance(type_, StrawberryScalar)  # noqa: E800
     return is_strawberry_scalar(type_, scalar_registry)
 
 
-def is_object_type(type_: Union[StrawberryType, type]) -> TypeGuard[type]:
-    # isinstance(type_, StrawberryObjectType)  # noqa: E800
-    return hasattr(type_, "_type_definition")
-
-
 def is_enum(type_: Union[StrawberryType, type]) -> TypeGuard[type]:
-    # isinstance(type_, StrawberryEnumType)  # noqa: E800
     return hasattr(type_, "_enum_definition")
 
 
@@ -54,13 +42,22 @@ def is_schema_directive(type_: Union[StrawberryType, type]) -> TypeGuard[type]:
     return hasattr(type_, "__strawberry_directive__")
 
 
-def is_generic(type_: Union[StrawberryType, type]) -> bool:
-    if hasattr(type_, "_type_definition"):
-        type_definition: TypeDefinition = type_._type_definition
-
-        return type_definition.is_generic
+# TODO: do we still need this?
+def is_graphql_generic(type_: Union[StrawberryType, type]) -> bool:
+    if has_object_definition(type_):
+        return type_.__strawberry_definition__.is_graphql_generic
 
     if isinstance(type_, StrawberryType):
-        return type_.is_generic
+        return type_.is_graphql_generic
 
     return False
+
+
+__all__ = [
+    "is_enum",
+    "is_graphql_generic",
+    "is_input_type",
+    "is_interface_type",
+    "is_scalar",
+    "is_schema_directive",
+]

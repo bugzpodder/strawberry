@@ -1,147 +1,210 @@
-import json
-from typing import Mapping
+from __future__ import annotations
 
-from flask import Response, render_template_string, request
-from flask.views import View
-from strawberry.exceptions import MissingQueryError
-from strawberry.file_uploads.utils import replace_placeholders_with_files
-from strawberry.flask.graphiql import should_render_graphiql
-from strawberry.http import (
-    GraphQLHTTPResponse,
-    parse_query_params,
-    parse_request_data,
-    process_result,
+import warnings
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Optional,
+    Union,
+    cast,
 )
-from strawberry.schema.base import BaseSchema
-from strawberry.schema.exceptions import InvalidOperationTypeError
-from strawberry.types import ExecutionResult
-from strawberry.types.graphql import OperationType
-from strawberry.utils.graphiql import get_graphiql_html
+from typing_extensions import TypeGuard
+
+from flask import Request, Response, render_template_string, request
+from flask.views import View
+from strawberry.http.async_base_view import AsyncBaseHTTPView, AsyncHTTPRequestAdapter
+from strawberry.http.exceptions import HTTPException
+from strawberry.http.sync_base_view import (
+    SyncBaseHTTPView,
+    SyncHTTPRequestAdapter,
+)
+from strawberry.http.types import FormData, HTTPMethod, QueryParams
+from strawberry.http.typevars import Context, RootValue
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from flask.typing import ResponseReturnValue
+    from strawberry.http import GraphQLHTTPResponse
+    from strawberry.http.ides import GraphQL_IDE
+    from strawberry.schema.base import BaseSchema
 
 
-class GraphQLView(View):
-    methods = ["GET", "POST"]
+class FlaskHTTPRequestAdapter(SyncHTTPRequestAdapter):
+    def __init__(self, request: Request) -> None:
+        self.request = request
+
+    @property
+    def query_params(self) -> QueryParams:
+        return self.request.args.to_dict()
+
+    @property
+    def body(self) -> Union[str, bytes]:
+        return self.request.data.decode()
+
+    @property
+    def method(self) -> HTTPMethod:
+        return cast(HTTPMethod, self.request.method.upper())
+
+    @property
+    def headers(self) -> Mapping[str, str]:
+        return self.request.headers
+
+    @property
+    def post_data(self) -> Mapping[str, Union[str, bytes]]:
+        return self.request.form
+
+    @property
+    def files(self) -> Mapping[str, Any]:
+        return self.request.files
+
+    @property
+    def content_type(self) -> Optional[str]:
+        return self.request.content_type
+
+
+class BaseGraphQLView:
+    graphql_ide: Optional[GraphQL_IDE]
 
     def __init__(
         self,
         schema: BaseSchema,
-        graphiql: bool = True,
+        graphiql: Optional[bool] = None,
+        graphql_ide: Optional[GraphQL_IDE] = "graphiql",
         allow_queries_via_get: bool = True,
-    ):
+        multipart_uploads_enabled: bool = False,
+    ) -> None:
         self.schema = schema
         self.graphiql = graphiql
         self.allow_queries_via_get = allow_queries_via_get
+        self.multipart_uploads_enabled = multipart_uploads_enabled
 
-    def get_root_value(self) -> object:
+        if graphiql is not None:
+            warnings.warn(
+                "The `graphiql` argument is deprecated in favor of `graphql_ide`",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.graphql_ide = "graphiql" if graphiql else None
+        else:
+            self.graphql_ide = graphql_ide
+
+    def create_response(
+        self, response_data: GraphQLHTTPResponse, sub_response: Response
+    ) -> Response:
+        sub_response.set_data(self.encode_json(response_data))  # type: ignore
+
+        return sub_response
+
+
+class GraphQLView(
+    BaseGraphQLView,
+    SyncBaseHTTPView[Request, Response, Response, Context, RootValue],
+    View,
+):
+    methods: ClassVar[list[str]] = ["GET", "POST"]
+    allow_queries_via_get: bool = True
+    request_adapter_class = FlaskHTTPRequestAdapter
+
+    def get_context(self, request: Request, response: Response) -> Context:
+        return {"request": request, "response": response}  # type: ignore
+
+    def get_root_value(self, request: Request) -> Optional[RootValue]:
         return None
 
-    def get_context(self, response: Response) -> Mapping[str, object]:
-        return {"request": request, "response": response}
+    def get_sub_response(self, request: Request) -> Response:
+        return Response(status=200, content_type="application/json")
 
-    def render_template(self, template: str) -> str:
-        return render_template_string(template)
-
-    def process_result(self, result: ExecutionResult) -> GraphQLHTTPResponse:
-        return process_result(result)
-
-    def dispatch_request(self) -> Response:
-        method = request.method
-        content_type = request.content_type or ""
-
-        if "application/json" in content_type:
-            data: dict = request.json  # type:ignore[assignment]
-        elif content_type.startswith("multipart/form-data"):
-            operations = json.loads(request.form.get("operations", "{}"))
-            files_map = json.loads(request.form.get("map", "{}"))
-
-            data = replace_placeholders_with_files(operations, files_map, request.files)
-        elif method == "GET" and request.args:
-            data = parse_query_params(request.args.to_dict())
-        elif method == "GET" and should_render_graphiql(self.graphiql, request):
-            template = get_graphiql_html(False)
-
-            return self.render_template(template=template)
-        else:
-            return Response("Unsupported Media Type", 415)
-
+    def dispatch_request(self) -> ResponseReturnValue:
         try:
-            request_data = parse_request_data(data)
-        except MissingQueryError:
-            return Response("No valid query was provided for the request", 400)
-
-        response = Response(status=200, content_type="application/json")
-        context = self.get_context(response)
-
-        allowed_operation_types = OperationType.from_http(method)
-
-        if not self.allow_queries_via_get and method == "GET":
-            allowed_operation_types = allowed_operation_types - {OperationType.QUERY}
-
-        try:
-            result = self.schema.execute_sync(
-                request_data.query,
-                variable_values=request_data.variables,
-                context_value=context,
-                operation_name=request_data.operation_name,
-                root_value=self.get_root_value(),
-                allowed_operation_types=allowed_operation_types,
+            return self.run(request=request)
+        except HTTPException as e:
+            return Response(
+                response=e.reason,
+                status=e.status_code,
             )
-        except InvalidOperationTypeError as e:
-            return Response(e.as_http_error_reason(method), 400)
 
-        response_data = self.process_result(result)
-        response.set_data(json.dumps(response_data))
-
-        return response
+    def render_graphql_ide(self, request: Request) -> Response:
+        return render_template_string(self.graphql_ide_html)  # type: ignore
 
 
-class AsyncGraphQLView(GraphQLView):
-    async def dispatch_request(self):
-        method = request.method
-        content_type = request.content_type or ""
+class AsyncFlaskHTTPRequestAdapter(AsyncHTTPRequestAdapter):
+    def __init__(self, request: Request) -> None:
+        self.request = request
 
-        if "application/json" in content_type:
-            data: dict = request.json  # type:ignore[assignment]
-        elif content_type.startswith("multipart/form-data"):
-            operations = json.loads(request.form.get("operations", "{}"))
-            files_map = json.loads(request.form.get("map", "{}"))
+    @property
+    def query_params(self) -> QueryParams:
+        return self.request.args.to_dict()
 
-            data = replace_placeholders_with_files(operations, files_map, request.files)
-        elif method == "GET" and request.args:
-            data = parse_query_params(request.args.to_dict())
-        elif method == "GET" and should_render_graphiql(self.graphiql, request):
-            template = get_graphiql_html(False)
+    @property
+    def method(self) -> HTTPMethod:
+        return cast(HTTPMethod, self.request.method.upper())
 
-            return self.render_template(template=template)
-        else:
-            return Response("Unsupported Media Type", 415)
+    @property
+    def content_type(self) -> Optional[str]:
+        return self.request.content_type
 
+    @property
+    def headers(self) -> Mapping[str, str]:
+        return self.request.headers
+
+    async def get_body(self) -> str:
+        return self.request.data.decode()
+
+    async def get_form_data(self) -> FormData:
+        return FormData(
+            files=self.request.files,
+            form=self.request.form,
+        )
+
+
+class AsyncGraphQLView(
+    BaseGraphQLView,
+    AsyncBaseHTTPView[
+        Request, Response, Response, Request, Response, Context, RootValue
+    ],
+    View,
+):
+    methods: ClassVar[list[str]] = ["GET", "POST"]
+    allow_queries_via_get: bool = True
+    request_adapter_class = AsyncFlaskHTTPRequestAdapter
+
+    async def get_context(self, request: Request, response: Response) -> Context:
+        return {"request": request, "response": response}  # type: ignore
+
+    async def get_root_value(self, request: Request) -> Optional[RootValue]:
+        return None
+
+    async def get_sub_response(self, request: Request) -> Response:
+        return Response(status=200, content_type="application/json")
+
+    async def dispatch_request(self) -> ResponseReturnValue:  # type: ignore
         try:
-            request_data = parse_request_data(data)
-        except MissingQueryError:
-            return Response("No valid query was provided for the request", 400)
-
-        response = Response(status=200, content_type="application/json")
-        context = self.get_context(response)
-
-        allowed_operation_types = OperationType.from_http(method)
-
-        if not self.allow_queries_via_get and method == "GET":
-            allowed_operation_types = allowed_operation_types - {OperationType.QUERY}
-
-        try:
-            result = await self.schema.execute(
-                request_data.query,
-                variable_values=request_data.variables,
-                context_value=context,
-                operation_name=request_data.operation_name,
-                root_value=self.get_root_value(),
-                allowed_operation_types=allowed_operation_types,
+            return await self.run(request=request)
+        except HTTPException as e:
+            return Response(
+                response=e.reason,
+                status=e.status_code,
             )
-        except InvalidOperationTypeError as e:
-            return Response(e.as_http_error_reason(method), 400)
 
-        response_data = self.process_result(result)
-        response.set_data(json.dumps(response_data))
+    async def render_graphql_ide(self, request: Request) -> Response:
+        content = render_template_string(self.graphql_ide_html)
+        return Response(content, status=200, content_type="text/html")
 
-        return response
+    def is_websocket_request(self, request: Request) -> TypeGuard[Request]:
+        return False
+
+    async def pick_websocket_subprotocol(self, request: Request) -> Optional[str]:
+        raise NotImplementedError
+
+    async def create_websocket_response(
+        self, request: Request, subprotocol: Optional[str]
+    ) -> Response:
+        raise NotImplementedError
+
+
+__all__ = [
+    "AsyncGraphQLView",
+    "GraphQLView",
+]

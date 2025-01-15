@@ -1,13 +1,21 @@
 # type: ignore
 import enum
-from typing import Generic, TypeVar
+import sys
+import textwrap
+from typing import Annotated, Generic, TypeVar, Union
+from typing_extensions import TypeAlias
+
+import pytest
 
 import strawberry
 from strawberry.annotation import StrawberryAnnotation
-from strawberry.field import StrawberryField
-from strawberry.lazy_type import LazyType
+from strawberry.types.base import get_object_definition
+from strawberry.types.field import StrawberryField
 from strawberry.types.fields.resolver import StrawberryResolver
-from strawberry.types.types import TypeDefinition
+from strawberry.types.lazy_type import LazyType
+from strawberry.types.union import StrawberryUnion, union
+
+T = TypeVar("T")
 
 
 # This type is in the same file but should adequately test the logic.
@@ -16,14 +24,21 @@ class LaziestType:
     something: bool
 
 
+@strawberry.type
+class LazyGenericType(Generic[T]):
+    something: T
+
+
+LazyTypeAlias: TypeAlias = LazyGenericType[int]
+
+
 @strawberry.enum
 class LazyEnum(enum.Enum):
     BREAD = "BREAD"
 
 
 def test_lazy_type():
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LaziestType", "test_lazy_types")
+    LazierType = LazyType("LaziestType", "tests.types.test_lazy_types")
 
     annotation = StrawberryAnnotation(LazierType)
     resolved = annotation.resolve()
@@ -36,9 +51,35 @@ def test_lazy_type():
     assert resolved.resolve_type() is LaziestType
 
 
+def test_lazy_type_alias():
+    LazierType = LazyType("LazyTypeAlias", "tests.types.test_lazy_types")
+
+    annotation = StrawberryAnnotation(LazierType)
+    resolved = annotation.resolve()
+
+    # Currently StrawberryAnnotation(LazyType).resolve() returns the unresolved
+    # LazyType. We may want to find a way to directly return the referenced object
+    # without a second resolving step.
+    assert isinstance(resolved, LazyType)
+    resolved_type = resolved.resolve_type()
+    assert resolved_type.__origin__ is LazyGenericType
+    assert resolved_type.__args__ == (int,)
+
+
+def test_lazy_type_function():
+    LethargicType = Annotated[
+        "LaziestType", strawberry.lazy("tests.types.test_lazy_types")
+    ]
+
+    annotation = StrawberryAnnotation(LethargicType)
+    resolved = annotation.resolve()
+
+    assert isinstance(resolved, LazyType)
+    assert resolved.resolve_type() is LaziestType
+
+
 def test_lazy_type_enum():
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LazyEnum", "test_lazy_types")
+    LazierType = LazyType("LazyEnum", "tests.types.test_lazy_types")
 
     annotation = StrawberryAnnotation(LazierType)
     resolved = annotation.resolve()
@@ -52,8 +93,7 @@ def test_lazy_type_enum():
 
 
 def test_lazy_type_argument():
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LaziestType", "test_lazy_types")
+    LazierType = LazyType("LaziestType", "tests.types.test_lazy_types")
 
     @strawberry.mutation
     def slack_off(emotion: LazierType) -> bool:
@@ -67,8 +107,7 @@ def test_lazy_type_argument():
 
 
 def test_lazy_type_field():
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LaziestType", "test_lazy_types")
+    LazierType = LazyType("LaziestType", "tests.types.test_lazy_types")
 
     annotation = StrawberryAnnotation(LazierType)
     field = StrawberryField(type_annotation=annotation)
@@ -85,33 +124,27 @@ def test_lazy_type_generic():
     class GenericType(Generic[T]):
         item: T
 
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LaziestType", "test_lazy_types")
+    LazierType = LazyType("LaziestType", "tests.types.test_lazy_types")
     ResolvedType = GenericType[LazierType]
 
     annotation = StrawberryAnnotation(ResolvedType)
     resolved = annotation.resolve()
 
-    # TODO: Simplify with StrawberryObject
-    assert isinstance(resolved, type)
-    assert hasattr(resolved, "_type_definition")
-    assert isinstance(resolved._type_definition, TypeDefinition)
-
-    items_field: StrawberryField = resolved._type_definition.fields[0]
+    definition = get_object_definition(resolved)
+    assert definition
+    items_field: StrawberryField = definition.fields[0]
     assert items_field.type is LazierType
     assert items_field.type.resolve_type() is LaziestType
 
 
 def test_lazy_type_object():
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LaziestType", "test_lazy_types")
+    LazierType = LazyType("LaziestType", "tests.types.test_lazy_types")
 
     @strawberry.type
     class WaterParkFeature:
         river: LazierType
 
-    # TODO: Remove reference to ._type_definition with StrawberryObject
-    field: StrawberryField = WaterParkFeature._type_definition.fields[0]
+    field: StrawberryField = WaterParkFeature.__strawberry_definition__.fields[0]
 
     assert isinstance(field.type, LazyType)
     assert field.type is LazierType
@@ -119,8 +152,7 @@ def test_lazy_type_object():
 
 
 def test_lazy_type_resolver():
-    # Module path is short and relative because of the way pytest runs the file
-    LazierType = LazyType("LaziestType", "test_lazy_types")
+    LazierType = LazyType("LaziestType", "tests.types.test_lazy_types")
 
     def slaking_pokemon() -> LazierType:
         raise NotImplementedError
@@ -129,3 +161,90 @@ def test_lazy_type_resolver():
     assert isinstance(resolver.type, LazyType)
     assert resolver.type is LazierType
     assert resolver.type.resolve_type() is LaziestType
+
+
+def test_lazy_type_in_union():
+    ActiveType = LazyType("LaziestType", "tests.types.test_lazy_types")
+    ActiveEnum = LazyType("LazyEnum", "tests.types.test_lazy_types")
+
+    something = Annotated[Union[ActiveType, ActiveEnum], union(name="CoolUnion")]
+    annotation = StrawberryAnnotation(something)
+
+    resolved = annotation.resolve()
+    assert isinstance(resolved, StrawberryUnion)
+
+    [type1, type2] = resolved.types
+    assert type1 is ActiveType
+    assert type2 is ActiveEnum
+    assert type1.resolve_type() is LaziestType
+    assert type2.resolve_type() is LazyEnum
+
+
+def test_lazy_function_in_union():
+    ActiveType = Annotated[
+        "LaziestType", strawberry.lazy("tests.types.test_lazy_types")
+    ]
+    ActiveEnum = Annotated["LazyEnum", strawberry.lazy("tests.types.test_lazy_types")]
+
+    something = Annotated[Union[ActiveType, ActiveEnum], union(name="CoolUnion")]
+    annotation = StrawberryAnnotation(something)
+
+    resolved = annotation.resolve()
+    assert isinstance(resolved, StrawberryUnion)
+
+    [type1, type2] = resolved.types
+    assert type1.resolve_type() is LaziestType
+    assert type2.resolve_type() is LazyEnum
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 10),
+    reason="| operator without future annotations is only available on python 3.10+",
+)
+def test_optional_lazy_type_using_or_operator():
+    from tests.schema.test_lazy.type_a import TypeA
+
+    @strawberry.type
+    class SomeType:
+        foo: Annotated[TypeA, strawberry.lazy("tests.schema.test_lazy.type_a")] | None
+
+    @strawberry.type
+    class AnotherType:
+        foo: TypeA | None = None
+
+    @strawberry.type
+    class Query:
+        some_type: SomeType
+        another_type: AnotherType
+
+    schema = strawberry.Schema(query=Query)
+    expected = """\
+    type AnotherType {
+      foo: TypeA
+    }
+
+    type Query {
+      someType: SomeType!
+      anotherType: AnotherType!
+    }
+
+    type SomeType {
+      foo: TypeA
+    }
+
+    type TypeA {
+      listOfB: [TypeB!]
+      typeB: TypeB!
+    }
+
+    type TypeB {
+      typeA: TypeA!
+      typeAList: [TypeA!]!
+      typeCList: [TypeC!]!
+    }
+
+    type TypeC {
+      name: String!
+    }
+    """
+    assert str(schema).strip() == textwrap.dedent(expected).strip()

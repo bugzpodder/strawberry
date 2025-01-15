@@ -3,7 +3,6 @@ from types import ModuleType
 
 import strawberry
 
-
 deferred_module_source = """
 from __future__ import annotations
 
@@ -25,14 +24,14 @@ def test_deferred_other_module():
     modules[mod.__name__] = mod
 
     try:
-        exec(deferred_module_source, mod.__dict__)
+        exec(deferred_module_source, mod.__dict__)  # noqa: S102
 
         @strawberry.type
         class Post(mod.UserContent):
             title: str
             body: str
 
-        definition = Post._type_definition
+        definition = Post.__strawberry_definition__
         assert definition.fields[0].type == mod.User
     finally:
         del modules[mod.__name__]

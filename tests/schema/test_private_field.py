@@ -6,7 +6,7 @@ import pytest
 import strawberry
 from strawberry.annotation import StrawberryAnnotation
 from strawberry.exceptions import PrivateStrawberryFieldError
-from strawberry.field import StrawberryField
+from strawberry.types.field import StrawberryField
 
 
 def test_private_field():
@@ -15,29 +15,29 @@ def test_private_field():
         name: str
         age: strawberry.Private[int]
 
-    definition = Query._type_definition
+    definition = Query.__strawberry_definition__
 
     assert definition.name == "Query"
     assert len(definition.fields) == 1
 
     assert definition.fields[0].python_name == "name"
     assert definition.fields[0].graphql_name is None
-    assert definition.fields[0].type == str
+    assert definition.fields[0].type is str
 
     instance = Query(name="Luke", age=22)
     assert instance.name == "Luke"
     assert instance.age == 22
 
 
+@pytest.mark.raises_strawberry_exception(
+    PrivateStrawberryFieldError,
+    match=("Field age on type Query cannot be both private and a strawberry.field"),
+)
 def test_private_field_with_strawberry_field_error():
-    with pytest.raises(PrivateStrawberryFieldError) as error:
-
-        @strawberry.type
-        class Query:
-            name: str
-            age: strawberry.Private[int] = strawberry.field(description="🤫")
-
-    assert "Field age on type Query" in str(error)
+    @strawberry.type
+    class Query:
+        name: str
+        age: strawberry.Private[int] = strawberry.field(description="🤫")
 
 
 def test_private_field_access_in_resolver():
@@ -79,7 +79,6 @@ class SensitiveData:
 
 def test_private_field_with_str_annotations():
     """Check compatibility of strawberry.Private with annotations as string."""
-
     schema = strawberry.Schema(query=Query)
 
     result = schema.execute_sync(
@@ -98,6 +97,7 @@ def test_private_field_with_str_annotations():
 
 def test_private_field_defined_outside_module_scope():
     """Check compatibility of strawberry.Private when defined outside module scope."""
+    global LocallyScopedSensitiveData
 
     @strawberry.type
     class LocallyScopedQuery:
@@ -112,11 +112,11 @@ def test_private_field_defined_outside_module_scope():
         value: int
         info: str
 
-    with pytest.raises(TypeError, match=r"Could not resolve the type of 'not_seen'."):
-        schema = strawberry.Schema(query=LocallyScopedQuery)
+    schema = strawberry.Schema(query=LocallyScopedQuery)
 
-        # If schema-conversion does not raise, check if private field is visible
-        assert "notSeen" not in str(schema)
+    assert "notSeen" not in str(schema)
+
+    del LocallyScopedSensitiveData
 
 
 def test_private_field_type_resolution_with_generic_type():
@@ -124,7 +124,6 @@ def test_private_field_type_resolution_with_generic_type():
 
     Refer to: https://github.com/strawberry-graphql/strawberry/issues/1938
     """
-
     T = TypeVar("T")
 
     class GenericPrivateType(Generic[T]):

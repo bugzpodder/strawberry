@@ -1,12 +1,17 @@
-from typing import AsyncGenerator
+import typing
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 
 import strawberry
 
+if typing.TYPE_CHECKING:
+    from strawberry.extensions.tracing.datadog import DatadogTracingExtension
+
 
 @pytest.fixture
-def datadog_extension(mocker):
+def datadog_extension(mocker) -> tuple[type["DatadogTracingExtension"], Any]:
     datadog_mock = mocker.MagicMock()
 
     mocker.patch.dict("sys.modules", ddtrace=datadog_mock)
@@ -17,7 +22,7 @@ def datadog_extension(mocker):
 
 
 @pytest.fixture
-def datadog_extension_sync(mocker):
+def datadog_extension_sync(mocker) -> tuple[type["DatadogTracingExtension"], Any]:
     datadog_mock = mocker.MagicMock()
 
     mocker.patch.dict("sys.modules", ddtrace=datadog_mock)
@@ -148,7 +153,7 @@ async def test_uses_operation_type(datadog_extension):
     """
 
     await schema.execute(query, operation_name="MyMutation")
-    mock.tracer.trace().set_tag.assert_any_call("graphql.operation_type", "mutation"),
+    mock.tracer.trace().set_tag.assert_any_call("graphql.operation_type", "mutation")
 
 
 @pytest.mark.asyncio
@@ -166,7 +171,7 @@ async def test_uses_operation_subscription(datadog_extension):
     await schema.execute(query, operation_name="MySubscription")
     mock.tracer.trace().set_tag.assert_any_call(
         "graphql.operation_type", "subscription"
-    ),
+    )
 
 
 def test_datadog_tracer_sync(datadog_extension_sync, mocker):
@@ -247,4 +252,66 @@ def test_uses_operation_type_sync(datadog_extension_sync):
 
     schema.execute_sync(query, operation_name="MyMutation")
 
-    mock.tracer.trace().set_tag.assert_any_call("graphql.operation_type", "mutation"),
+    mock.tracer.trace().set_tag.assert_any_call("graphql.operation_type", "mutation")
+
+
+@pytest.mark.asyncio
+async def test_create_span_override(datadog_extension):
+    from strawberry.extensions.tracing.datadog import LifecycleStep
+
+    extension, mock = datadog_extension
+
+    class CustomExtension(extension):
+        def create_span(
+            self,
+            lifecycle_step: LifecycleStep,
+            name: str,
+            **kwargs,  # noqa: ANN003
+        ):
+            span = super().create_span(lifecycle_step, name, **kwargs)
+            if lifecycle_step == LifecycleStep.OPERATION:
+                span.set_tag("graphql.query", self.execution_context.query)
+            return span
+
+    schema = strawberry.Schema(
+        query=Query,
+        mutation=Mutation,
+        extensions=[CustomExtension],
+    )
+
+    query = """
+        query {
+            personAsync {
+                name
+            }
+        }
+    """
+
+    await schema.execute(query)
+
+    mock.tracer.trace().set_tag.assert_any_call("graphql.query", query)
+
+
+@pytest.mark.asyncio
+async def test_uses_query_missing_operation_if_no_query(datadog_extension, mocker):
+    """Avoid regression of https://github.com/strawberry-graphql/strawberry/issues/3150"""
+    extension, mock = datadog_extension
+
+    schema = strawberry.Schema(query=Query, mutation=Mutation, extensions=[extension])
+
+    # A missing query error is expected here, but the extension will run anyways
+    with pytest.raises(strawberry.exceptions.MissingQueryError):
+        await schema.execute(None)
+
+    mock.tracer.assert_has_calls(
+        [
+            mocker.call.trace(
+                "Anonymous Query",
+                resource="query_missing",
+                span_type="graphql",
+                service="strawberry",
+            ),
+            mocker.call.trace().set_tag("graphql.operation_name", None),
+            mocker.call.trace().set_tag("graphql.operation_type", "query_missing"),
+        ]
+    )

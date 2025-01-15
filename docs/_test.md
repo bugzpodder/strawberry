@@ -16,6 +16,7 @@ Code blocks now support:
 ```python highlight=strawberry,str
 import strawberry
 
+
 @strawberry.type
 class X:
     name: str
@@ -23,8 +24,9 @@ class X:
 
 ### Highlighting lines
 
-```python line=1-4
+```python lines=1-4
 import strawberry
+
 
 @strawberry.type
 class X:
@@ -36,8 +38,13 @@ class X:
 This is probably not implemented in the best way, but for now it works:
 
 ```python
-import ^[info](strawberry)
+import strawberry
 
+#      ^^^^^^^^^^
+#      This is a note about this line
+
+
+# this is a standard comment
 @strawberry.type
 class X:
     name: str
@@ -50,19 +57,26 @@ class X:
 You can show two different code blocks next to each other (useful when comparing
 the GraphQL schema against the Python definition):
 
-```python+schema
+<CodeGrid>
+
+```python
 import strawberry
+
 
 @strawberry.type
 class Query:
     @strawberry.field
     def ping(self) -> str:
         return "pong"
----
+```
+
+```graphql
 type Query {
-    ping: String!
+  ping: String!
 }
 ```
+
+</CodeGrid>
 
 or when showing the request and response to a query:
 
@@ -101,3 +115,15 @@ This is a warning. Something that you should be careful about.
 ## Blockquote
 
 > This is a quote
+
+```mermaid
+sequenceDiagram
+    Alice ->> Bob: Hello Bob, how are you?
+    Bob-->>John: How about you John?
+    Bob--x Alice: I am good thanks!
+    Bob-x John: I am good thanks!
+    Note right of John: Bob thinks a long<br/>long time, so long<br/>that the text does<br/>not fit on a row.
+
+    Bob-->Alice: Checking with John...
+    Alice->John: Yes... John, how are you?
+```

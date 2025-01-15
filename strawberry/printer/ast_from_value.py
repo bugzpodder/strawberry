@@ -1,7 +1,9 @@
-import dataclasses
+from __future__ import annotations
+
 import re
+from collections.abc import Mapping
 from math import isfinite
-from typing import Any, Mapping, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from graphql.language import (
     BooleanValueNode,
@@ -14,15 +16,10 @@ from graphql.language import (
     ObjectFieldNode,
     ObjectValueNode,
     StringValueNode,
-    ValueNode,
 )
 from graphql.pyutils import Undefined, inspect, is_iterable
 from graphql.type import (
     GraphQLID,
-    GraphQLInputObjectType,
-    GraphQLInputType,
-    GraphQLList,
-    GraphQLNonNull,
     is_enum_type,
     is_input_object_type,
     is_leaf_type,
@@ -30,6 +27,17 @@ from graphql.type import (
     is_non_null_type,
 )
 
+import strawberry
+from strawberry.types.base import has_object_definition
+
+if TYPE_CHECKING:
+    from graphql.language import ValueNode
+    from graphql.type import (
+        GraphQLInputObjectType,
+        GraphQLInputType,
+        GraphQLList,
+        GraphQLNonNull,
+    )
 
 __all__ = ["ast_from_value"]
 
@@ -48,8 +56,7 @@ def ast_from_leaf_type(
         return IntValueNode(value=str(serialized))
     if isinstance(serialized, float) and isfinite(serialized):
         value = str(serialized)
-        if value.endswith(".0"):
-            value = value[:-2]
+        value = value.removesuffix(".0")
         return FloatValueNode(value=value)
 
     if isinstance(serialized, str):
@@ -84,7 +91,7 @@ def ast_from_value(value: Any, type_: GraphQLInputType) -> Optional[ValueNode]:
     # basic types, namely JSON scalar types
 
     if is_non_null_type(type_):
-        type_ = cast(GraphQLNonNull, type_)
+        type_ = cast("GraphQLNonNull", type_)
         ast_value = ast_from_value(value, type_.of_type)
         if isinstance(ast_value, NullValueNode):
             return None
@@ -101,7 +108,7 @@ def ast_from_value(value: Any, type_: GraphQLInputType) -> Optional[ValueNode]:
     # Convert Python list to GraphQL list. If the GraphQLType is a list, but the value
     # is not a list, convert the value using the list's item type.
     if is_list_type(type_):
-        type_ = cast(GraphQLList, type_)
+        type_ = cast("GraphQLList", type_)
         item_type = type_.of_type
         if is_iterable(value):
             maybe_value_nodes = (ast_from_value(item, item_type) for item in value)
@@ -112,14 +119,13 @@ def ast_from_value(value: Any, type_: GraphQLInputType) -> Optional[ValueNode]:
     # Populate the fields of the input object by creating ASTs from each value in the
     # Python dict according to the fields in the input type.
     if is_input_object_type(type_):
-        # TODO: is this the right place?
-        if hasattr(value, "_type_definition"):
-            value = dataclasses.asdict(value)
+        if has_object_definition(value):
+            value = strawberry.asdict(value)
 
         if value is None or not isinstance(value, Mapping):
             return None
 
-        type_ = cast(GraphQLInputObjectType, type_)
+        type_ = cast("GraphQLInputObjectType", type_)
         field_items = (
             (field_name, ast_from_value(value[field_name], field.type))
             for field_name, field in type_.fields.items()
@@ -143,3 +149,6 @@ def ast_from_value(value: Any, type_: GraphQLInputType) -> Optional[ValueNode]:
 
     # Not reachable. All possible input types have been considered.
     raise TypeError(f"Unexpected input type: {inspect(type_)}.")  # pragma: no cover
+
+
+__all__ = ["ast_from_value"]

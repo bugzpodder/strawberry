@@ -1,15 +1,15 @@
 import sys
+import typing
 from typing import Union
 
 import pytest
 
 import strawberry
 from strawberry.annotation import StrawberryAnnotation
-from strawberry.exceptions import InvalidUnionType
+from strawberry.exceptions.invalid_union_type import InvalidUnionTypeError
 from strawberry.schema.types.base_scalars import Date, DateTime
-from strawberry.type import StrawberryOptional
-from strawberry.union import StrawberryUnion
-
+from strawberry.types.base import StrawberryOptional
+from strawberry.types.union import StrawberryUnion
 
 pytestmark = pytest.mark.skipif(
     sys.version_info < (3, 10),
@@ -65,7 +65,7 @@ def test_strawberry_union_and_none():
     class Error:
         name: str
 
-    UserOrError = strawberry.union("UserOrError", (User, Error))
+    UserOrError = typing.Annotated[User | Error, strawberry.union(name="UserOrError")]
     annotation = StrawberryAnnotation(UserOrError | None)
     resolved = annotation.resolve()
 
@@ -79,6 +79,10 @@ def test_strawberry_union_and_none():
     )
 
 
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError,
+    match="Type `int` cannot be used in a GraphQL Union",
+)
 def test_raises_error_when_piping_with_scalar():
     @strawberry.type
     class User:
@@ -88,10 +92,18 @@ def test_raises_error_when_piping_with_scalar():
     class Error:
         name: str
 
-    UserOrError = strawberry.union("UserOrError", (User, Error))
+    UserOrError = typing.Annotated[User | Error, strawberry.union("UserOrError")]
 
-    with pytest.raises(InvalidUnionType):
-        StrawberryAnnotation(UserOrError | int)
+    @strawberry.type
+    class Query:
+        user: UserOrError | int
 
-    with pytest.raises(InvalidUnionType):
-        StrawberryAnnotation(Date | DateTime)
+    strawberry.Schema(query=Query)
+
+
+@pytest.mark.raises_strawberry_exception(
+    InvalidUnionTypeError,
+    match="Type `date` cannot be used in a GraphQL Union",
+)
+def test_raises_error_when_piping_with_custom_scalar():
+    StrawberryAnnotation(Date | DateTime)

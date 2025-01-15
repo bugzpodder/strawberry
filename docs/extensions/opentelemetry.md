@@ -1,18 +1,19 @@
 ---
-title: OpenTelemetryExtension
+title: Open Telemetry
 summary: Add Open Telemetry tracing to your GraphQL server.
 tags: tracing
 ---
 
 # `OpenTelemetryExtension`
 
-This extension adds tracing information that is compatible with [Open Telemetry](https://opentelemetry.io/).
+This extension adds tracing information that is compatible with
+[Open Telemetry](https://opentelemetry.io/).
 
 <Note>
 
 This extension requires additional requirements:
 
-```
+```shell
 pip install 'strawberry-graphql[opentelemetry]'
 ```
 
@@ -28,13 +29,14 @@ schema = strawberry.Schema(
     Query,
     extensions=[
         OpenTelemetryExtension,
-    ]
+    ],
 )
 ```
 
 <Note>
 
-If you are not running in an Async context then you'll need to use the sync version:
+If you are not running in an Async context then you'll need to use the sync
+version:
 
 ```python
 import strawberry
@@ -44,7 +46,7 @@ schema = strawberry.Schema(
     Query,
     extensions=[
         OpenTelemetryExtensionSync,
-    ]
+    ],
 )
 ```
 
@@ -53,7 +55,7 @@ schema = strawberry.Schema(
 ## API reference:
 
 ```python
-class OpenTelemetryExtension(arg_filter=None)
+class OpenTelemetryExtension(arg_filter=None): ...
 ```
 
 #### `arg_filter: Optional[ArgFilter]`
@@ -62,10 +64,7 @@ A function to filter certain field arguments from being included in the tracing
 data.
 
 ```python
-ArgFilter = Callable[
-  [Dict[str, Any], GraphQLResolveInfo],
-  Dict[str, Any]
-]
+ArgFilter = Callable[[Dict[str, Any], GraphQLResolveInfo], Dict[str, Any]]
 ```
 
 ## More examples:
@@ -77,6 +76,7 @@ ArgFilter = Callable[
 import strawberry
 from strawberry.extensions.tracing import OpenTelemetryExtensionSync
 
+
 def arg_filter(kwargs, info):
     filtered_kwargs = {}
     for name, value in kwargs:
@@ -87,13 +87,14 @@ def arg_filter(kwargs, info):
 
     return filtered_kwargs
 
+
 schema = strawberry.Schema(
     Query,
     extensions=[
         OpenTelemetryExtensionSync(
-          arg_filter=arg_filter,
+            arg_filter=arg_filter,
         ),
-    ]
+    ],
 )
 ```
 
